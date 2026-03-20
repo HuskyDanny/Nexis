@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { DailyGraph, Layer, Market } from "../types/graph";
+import type { ThinkingNode, ThinkingSession } from "../types/thinking";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -36,4 +37,23 @@ export const graphApi = {
     api.get<Layer[]>(`/nodes/${nodeId}/layers`),
   getPools: (date: string, market: Market = "US") =>
     api.get<PoolsResponse>(`/pools/${date}`, { params: { market } }),
+  startThinking: (date: string, market: Market = "US", maxDepth: number = 3) =>
+    api.post<{ session_id: string; status: string }>("/thinking", {
+      date,
+      market,
+      max_depth: maxDepth,
+    }),
+  getSession: (sessionId: string) =>
+    api.get<ThinkingSession>(`/thinking/${sessionId}`),
+  thinkStep: (sessionId: string) =>
+    api.post<{ status: string; current_layer: number }>(
+      `/thinking/${sessionId}/step`,
+    ),
+  toggleNode: (sessionId: string, nodeId: string, selected: boolean) =>
+    api.patch<{ dirty_count: number; status: string }>(
+      `/thinking/${sessionId}/node/${nodeId}`,
+      { selected },
+    ),
+  matchValues: (sessionId: string) =>
+    api.post<{ opportunities: ThinkingNode[] }>(`/thinking/${sessionId}/match`),
 };

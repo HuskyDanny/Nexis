@@ -8,6 +8,7 @@ import {
   forceManyBody,
   forceCenter,
   forceCollide,
+  forceRadial,
   type SimulationNodeDatum,
   type SimulationLinkDatum,
 } from "d3-force";
@@ -32,6 +33,10 @@ interface LayoutOptions {
   iterations?: number;
   /** Center position. Default: {x: 0, y: 0} */
   center?: { x: number; y: number };
+  /** Map of node ID → layer number for radial constraint */
+  layerMap?: Map<string, number>;
+  /** Radius per layer (pixels). Default: 150 */
+  layerRadius?: number;
 }
 
 export function layoutGraph(
@@ -45,6 +50,8 @@ export function layoutGraph(
     collideRadius = 80,
     iterations = 100,
     center = { x: 0, y: 0 },
+    layerMap,
+    layerRadius = 150,
   } = options;
 
   // Create simulation nodes
@@ -71,8 +78,21 @@ export function layoutGraph(
     )
     .force("charge", forceManyBody().strength(chargeStrength))
     .force("center", forceCenter(center.x, center.y))
-    .force("collide", forceCollide(collideRadius))
-    .stop();
+    .force("collide", forceCollide(collideRadius));
+
+  // Add radial constraint for concentric ring layout
+  if (layerMap) {
+    simulation.force(
+      "radial",
+      forceRadial<ForceNode>(
+        (d) => (layerMap.get(d.id) ?? 0) * layerRadius,
+        center.x,
+        center.y,
+      ).strength(0.8),
+    );
+  }
+
+  simulation.stop();
 
   // Run synchronously
   for (let i = 0; i < iterations; i++) {
