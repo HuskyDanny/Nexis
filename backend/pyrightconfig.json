@@ -1,6 +1,6 @@
 {
   "root": ".",
   "pythonVersion": "3.12",
-  "extraPaths": ["src"],
+  "extraPaths": ["."],
   "reportMissingImports": "warning"
 }
