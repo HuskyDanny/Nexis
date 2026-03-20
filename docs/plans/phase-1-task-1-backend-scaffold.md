@@ -41,7 +41,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "httpx>=0.28"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "pytest-cov>=6.0", "httpx>=0.28"]
 ```
 
 - [ ] **Step 2: Create config.py with Pydantic Settings**
@@ -62,7 +62,29 @@ class Settings(BaseSettings):
 settings = Settings()
 ```
 
-- [ ] **Step 3: Create main.py with FastAPI app and lifespan**
+- [ ] **Step 3: Write failing test for health endpoint**
+
+```python
+# tests/test_health.py
+import pytest
+from httpx import AsyncClient, ASGITransport
+
+@pytest.mark.asyncio
+async def test_health_returns_ok():
+    # Import deferred to avoid DB connection at import time
+    from src.main import app
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        resp = await c.get("/api/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+    assert "version" in resp.json()
+```
+
+Run: `cd backend && python -m pytest tests/test_health.py -v`
+Expected: FAIL — module not found
+
+- [ ] **Step 4: Create main.py with FastAPI app and lifespan**
 
 ```python
 from contextlib import asynccontextmanager
@@ -90,14 +112,30 @@ async def health():
     return {"status": "ok", "version": "0.1.0"}
 ```
 
-- [ ] **Step 4: Create .env.base with default config values**
+- [ ] **Step 5: Create conftest.py with MongoDB mock for tests**
 
-- [ ] **Step 5: Verify backend starts**
+```python
+# tests/conftest.py
+import pytest
+from unittest.mock import AsyncMock, patch
 
-Run: `cd backend && pip install -e ".[dev]" && uvicorn src.main:app --port 8000`
-Expected: Server starts, `GET /api/health` returns `{"status": "ok"}`
+@pytest.fixture(autouse=True)
+def mock_mongodb():
+    """Prevent real MongoDB connection during tests."""
+    with patch("src.database.mongodb.mongodb") as mock:
+        mock.connect = AsyncMock()
+        mock.close = AsyncMock()
+        yield mock
+```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Create .env.base with default config values**
+
+- [ ] **Step 7: Run health test — verify it passes**
+
+Run: `cd backend && python -m pytest tests/test_health.py -v`
+Expected: PASS
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add backend/ && git commit -m "feat: backend scaffold — FastAPI + config + health endpoint"

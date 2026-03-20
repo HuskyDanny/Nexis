@@ -11,6 +11,9 @@
 
 - [ ] **Step 1: Write failing tests for graph API**
 
+Note: Uses `mock_mongodb` from `conftest.py` (created in Task 1). Also needs mock repositories
+injected via FastAPI dependency overrides.
+
 ```python
 import pytest
 from httpx import AsyncClient, ASGITransport
