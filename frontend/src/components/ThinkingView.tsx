@@ -32,6 +32,9 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
   const [selectedNode, setSelectedNode] = useState<ThinkingNode | null>(null);
+  const [highlightedPath, setHighlightedPath] = useState<Set<string>>(
+    new Set(),
+  );
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const [isThinking, setIsThinking] = useState(false);
 
@@ -93,6 +96,91 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     }
     setIsThinking(false);
   }, [sessionId, session, isThinking, loadSession]);
+
+  // Trace ancestor path from a node back to roots (for hover highlighting)
+  const traceAncestors = useCallback(
+    (nodeId: string): Set<string> => {
+      if (!session) return new Set();
+      const ancestors = new Set<string>();
+      const queue = [nodeId];
+      ancestors.add(nodeId);
+
+      // Build reverse edge map: target → sources
+      const parentMap: Record<string, string[]> = {};
+      for (const e of session.edges) {
+        (parentMap[e.target] ??= []).push(e.source);
+      }
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        for (const parent of parentMap[current] ?? []) {
+          if (!ancestors.has(parent)) {
+            ancestors.add(parent);
+            queue.push(parent);
+          }
+        }
+      }
+      return ancestors;
+    },
+    [session],
+  );
+
+  // Hover: highlight ancestor path for opportunity nodes
+  const handleNodeMouseEnter = useCallback(
+    (_: React.MouseEvent, node: RFNode) => {
+      if (!session) return;
+      const thinkingNode = session.nodes.find((n) => n.id === node.id);
+      if (
+        thinkingNode?.type === "opportunity" ||
+        thinkingNode?.type === "effect"
+      ) {
+        const path = traceAncestors(node.id);
+        setHighlightedPath(path);
+
+        // Update node styles — highlighted nodes get full opacity, others dim
+        setNodes((prev) =>
+          prev.map((n) => ({
+            ...n,
+            style: {
+              ...n.style,
+              opacity: path.has(n.id) ? 1 : 0.15,
+              transition: "opacity 0.3s ease",
+            },
+          })),
+        );
+
+        // Update edge styles — highlighted edges glow
+        setEdges((prev) =>
+          prev.map((e) => {
+            const isOnPath = path.has(e.source) && path.has(e.target);
+            return {
+              ...e,
+              style: {
+                ...e.style,
+                stroke: isOnPath ? "#f97316" : "rgba(255,255,255,0.05)",
+                strokeWidth: isOnPath ? 2.5 : 1,
+              },
+              animated: isOnPath,
+            };
+          }),
+        );
+      }
+    },
+    [session, traceAncestors, setNodes, setEdges],
+  );
+
+  const handleNodeMouseLeave = useCallback(() => {
+    setHighlightedPath(new Set());
+    // Restore original styles by reloading
+    if (session) {
+      const { rfNodes, rfEdges } = buildThinkingGraph(
+        session.nodes,
+        session.edges,
+      );
+      setNodes(rfNodes);
+      setEdges(rfEdges);
+    }
+  }, [session, setNodes, setEdges]);
 
   // Toggle node selection
   const handleNodeClick = useCallback(
@@ -263,6 +351,8 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
+        onNodeMouseEnter={handleNodeMouseEnter}
+        onNodeMouseLeave={handleNodeMouseLeave}
         onInit={(instance) => {
           rfInstance.current = instance;
         }}
