@@ -2,10 +2,214 @@
 
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
-  --color-primary: #3b82f6;
-  --color-surface: #0f172a;
-  --color-surface-alt: #1e293b;
-  --color-text: #f8fafc;
-  --color-text-muted: #94a3b8;
-  --color-border: #334155;
+  --color-primary: #ef4444;
+  --color-primary-glow: rgba(239, 68, 68, 0.15);
+  --color-accent: #f97316;
+  --color-surface: #080b14;
+  --color-surface-alt: rgba(15, 20, 35, 0.8);
+  --color-surface-card: rgba(20, 27, 45, 0.6);
+  --color-text: #f0f0f5;
+  --color-text-muted: #6b7394;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-glow: rgba(255, 255, 255, 0.1);
+  --color-bullish: #22c55e;
+  --color-bearish: #ef4444;
+  --color-neutral: #6b7394;
+}
+
+/* Starfield background */
+body {
+  background: var(--color-surface);
+  background-image:
+    radial-gradient(
+      1px 1px at 10% 20%,
+      rgba(255, 255, 255, 0.12) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      1px 1px at 80% 10%,
+      rgba(255, 255, 255, 0.1) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      1px 1px at 30% 70%,
+      rgba(255, 255, 255, 0.08) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      1px 1px at 90% 60%,
+      rgba(255, 255, 255, 0.1) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      1px 1px at 50% 40%,
+      rgba(255, 255, 255, 0.06) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      1px 1px at 15% 85%,
+      rgba(255, 255, 255, 0.09) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      1px 1px at 70% 90%,
+      rgba(255, 255, 255, 0.07) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse at 20% 50%,
+      rgba(239, 68, 68, 0.03) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 80% 20%,
+      rgba(99, 102, 241, 0.03) 0%,
+      transparent 50%
+    );
+}
+
+/* Glass card base */
+.glass-card {
+  background: var(--color-surface-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.glass-card:hover {
+  border-color: var(--color-border-glow);
+}
+
+/* Override React Flow defaults */
+.react-flow__background {
+  opacity: 0.3;
+}
+
+.react-flow__minimap {
+  background: var(--color-surface-alt) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.react-flow__controls {
+  background: var(--color-surface-alt) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.react-flow__controls button {
+  background: transparent !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-muted) !important;
+  fill: var(--color-text-muted) !important;
+}
+
+.react-flow__controls button:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--color-text) !important;
+  fill: var(--color-text) !important;
+}
+
+.react-flow__edge-textbg {
+  fill: var(--color-surface) !important;
+}
+
+.react-flow__edge-text {
+  fill: var(--color-text-muted) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* React Flow node position animation — explode from center */
+.react-flow__node {
+  transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* Soft float on inner node content (not the wrapper — React Flow owns that transform) */
+.react-flow__node > div {
+  animation: nodeFloat 4s ease-in-out infinite;
+  animation-delay: calc(var(--float-delay, 0) * 1s);
+}
+
+@keyframes nodeFloat {
+  0%,
+  100% {
+    margin-top: 0;
+  }
+  50% {
+    margin-top: -3px;
+  }
+}
+
+/* Pool card floating animation */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Node fade-slide into canvas */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Agent face blob rotation */
+@keyframes blobRotate {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(90deg) scale(1.05);
+  }
+  50% {
+    transform: rotate(180deg) scale(1);
+  }
+  75% {
+    transform: rotate(270deg) scale(0.95);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+/* Convergence node pop-in */
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }

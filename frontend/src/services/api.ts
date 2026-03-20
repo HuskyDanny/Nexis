@@ -3,10 +3,37 @@ import type { DailyGraph, Layer, Market } from "../types/graph";
 
 const api = axios.create({ baseURL: "/api" });
 
+export interface PoolItem {
+  id: string;
+  type: string;
+  title?: string;
+  ticker?: string;
+  source?: string;
+  url?: string;
+  summary: string;
+  direction: string;
+  confidence: number;
+  sectors?: string[];
+  price?: number;
+  high_52w?: number;
+  discount_pct?: number;
+  pe_ratio?: number | null;
+  pb_ratio?: number;
+  div_yield?: number;
+  sector?: string;
+}
+
+export interface PoolsResponse {
+  news: PoolItem[];
+  value: PoolItem[];
+}
+
 export const graphApi = {
   getGraph: (date: string, market: Market = "US") =>
     api.get<DailyGraph>(`/graphs/${date}`, { params: { market } }),
   getDates: () => api.get<string[]>("/graphs/dates"),
   getNodeLayers: (nodeId: string) =>
     api.get<Layer[]>(`/nodes/${nodeId}/layers`),
+  getPools: (date: string, market: Market = "US") =>
+    api.get<PoolsResponse>(`/pools/${date}`, { params: { market } }),
 };
