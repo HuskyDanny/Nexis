@@ -37,11 +37,17 @@ export const graphApi = {
     api.get<Layer[]>(`/nodes/${nodeId}/layers`),
   getPools: (date: string, market: Market = "US") =>
     api.get<PoolsResponse>(`/pools/${date}`, { params: { market } }),
-  startThinking: (date: string, market: Market = "US", maxDepth: number = 3) =>
+  startThinking: (
+    date: string,
+    market: Market = "US",
+    maxDepth: number = 3,
+    selectedNewsIds?: string[],
+  ) =>
     api.post<{ session_id: string; status: string }>("/thinking", {
       date,
       market,
       max_depth: maxDepth,
+      selected_news_ids: selectedNewsIds,
     }),
   getSession: (sessionId: string) =>
     api.get<ThinkingSession>(`/thinking/${sessionId}`),

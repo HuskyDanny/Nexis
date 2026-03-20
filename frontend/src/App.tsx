@@ -12,13 +12,9 @@ import {
 import "@xyflow/react/dist/style.css";
 import { graphApi, type PoolItem } from "./services/api";
 import { createLogger } from "./lib/logger";
-import {
-  buildGraph,
-  TYPE_COLORS,
-  DIR_ICON,
-  type Convergence,
-} from "./lib/graph-builder";
+import { TYPE_COLORS, DIR_ICON, type Convergence } from "./lib/graph-builder";
 import { AgentFace } from "./components/AgentFace";
+import { ThinkingView } from "./components/ThinkingView";
 
 const log = createLogger("app");
 
@@ -108,10 +104,15 @@ function App() {
   const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
-  const [phase, setPhase] = useState<"pools" | "connecting" | "done">("pools");
+  const [phase, setPhase] = useState<
+    "pools" | "connecting" | "done" | "thinking"
+  >("pools");
   const [convergences, setConvergences] = useState<Convergence[]>([]);
   const connectingRef = useRef(false);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
+  const [thinkingSessionId, setThinkingSessionId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     log.info("Loading pools for 2026-03-20");
@@ -147,42 +148,20 @@ function App() {
     });
   }, []);
 
-  const startConnecting = useCallback(async () => {
-    if (connectingRef.current) return;
-    connectingRef.current = true;
-    setPhase("connecting");
-
-    const selNews = newsPool.filter((n) => selectedNews.has(n.id));
-    const selVals = valuePool.filter((v) => selectedValues.has(v.id));
-    log.info(
-      "Phase: connecting —",
-      selNews.length,
-      "news +",
-      selVals.length,
-      "values",
-    );
-
-    const result = buildGraph(selNews, selVals);
-
-    // Stage 1: Place all nodes at center (explode start)
-    setNodes(result.centeredNodes);
-    await new Promise((r) => setTimeout(r, 200));
-    rfInstance.current?.fitView({ padding: 0.3, duration: 0 });
-
-    // Stage 2: Animate to dagre positions (explode outward)
-    setNodes(result.layoutNodes);
-    await new Promise((r) => setTimeout(r, 300));
-    rfInstance.current?.fitView({ padding: 0.15, duration: 600 });
-
-    // Stage 3: Add edges after nodes settle
-    await new Promise((r) => setTimeout(r, 400));
-    setEdges(result.edges);
-    setConvergences(result.convergences);
-
-    setPhase("done");
-    log.info("Phase: done —", result.convergences.length, "convergences found");
-    connectingRef.current = false;
-  }, [newsPool, valuePool, selectedNews, selectedValues, setNodes, setEdges]);
+  // Start thinking session
+  const startThinking = useCallback(async () => {
+    if (selectedNews.size === 0) return;
+    log.info("Starting thinking session with", selectedNews.size, "news");
+    try {
+      const newsIds = Array.from(selectedNews);
+      const res = await graphApi.startThinking("2026-03-20", "US", 3, newsIds);
+      setThinkingSessionId(res.data.session_id);
+      setPhase("thinking");
+      log.info("Thinking session started:", res.data.session_id);
+    } catch (err) {
+      log.error("Failed to start thinking:", err);
+    }
+  }, [selectedNews]);
 
   const reset = useCallback(() => {
     setPhase("pools");
@@ -191,10 +170,9 @@ function App() {
     setConvergences([]);
     setSelectedNews(new Set());
     setSelectedValues(new Set());
+    setThinkingSessionId(null);
     connectingRef.current = false;
   }, [setNodes, setEdges]);
-
-  const canConnect = selectedNews.size > 0 && selectedValues.size > 0;
 
   return (
     <div className="h-screen w-screen flex flex-col bg-surface text-text">
@@ -299,94 +277,100 @@ function App() {
           </div>
         </div>
 
-        {/* Center — Graph */}
-        <div className="flex-1 relative">
-          {phase === "pools" && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="flex flex-col items-center gap-6 pointer-events-auto">
-                <AgentFace size={64} />
-                <p className="text-text-muted text-sm tracking-wide">
-                  Select news & values, then connect
-                </p>
-                <button
-                  onClick={startConnecting}
-                  disabled={!canConnect}
-                  className="px-6 py-2.5 rounded-lg text-sm font-medium tracking-wide transition-all duration-300"
-                  style={{
-                    background: canConnect
-                      ? "rgba(239, 68, 68, 0.15)"
-                      : "rgba(255,255,255,0.03)",
-                    color: canConnect ? "#ef4444" : "#6b7394",
-                    border: `1px solid ${canConnect ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.06)"}`,
-                    cursor: canConnect ? "pointer" : "not-allowed",
-                    boxShadow: canConnect
-                      ? "0 0 20px rgba(239,68,68,0.1)"
-                      : "none",
-                  }}
-                >
-                  {canConnect
-                    ? `Connect ${selectedNews.size} + ${selectedValues.size}`
-                    : "Select items from both pools"}
-                </button>
+        {/* Center — Graph or ThinkingView */}
+        {phase === "thinking" && thinkingSessionId ? (
+          <ThinkingView sessionId={thinkingSessionId} onReset={reset} />
+        ) : (
+          <div className="flex-1 relative">
+            {phase === "pools" && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                <div className="flex flex-col items-center gap-6 pointer-events-auto">
+                  <AgentFace size={64} />
+                  <p className="text-text-muted text-sm tracking-wide">
+                    Select news, then start thinking
+                  </p>
+                  <button
+                    onClick={startThinking}
+                    disabled={selectedNews.size === 0}
+                    className="px-6 py-2.5 rounded-lg text-sm font-medium tracking-wide transition-all duration-300"
+                    style={{
+                      background:
+                        selectedNews.size > 0
+                          ? "rgba(249, 115, 22, 0.15)"
+                          : "rgba(255,255,255,0.03)",
+                      color: selectedNews.size > 0 ? "#f97316" : "#6b7394",
+                      border: `1px solid ${selectedNews.size > 0 ? "rgba(249,115,22,0.3)" : "rgba(255,255,255,0.06)"}`,
+                      cursor: selectedNews.size > 0 ? "pointer" : "not-allowed",
+                      boxShadow:
+                        selectedNews.size > 0
+                          ? "0 0 20px rgba(249,115,22,0.1)"
+                          : "none",
+                    }}
+                  >
+                    {selectedNews.size > 0
+                      ? `Start Thinking (${selectedNews.size} news)`
+                      : "Select news to start"}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {phase === "done" && convergences.length > 0 && (
-            <div
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass-card px-4 py-2.5 flex items-center gap-3"
-              style={{ boxShadow: "0 0 30px rgba(239,68,68,0.15)" }}
-            >
-              <span className="text-xs text-text-muted uppercase tracking-widest">
-                Convergences:
-              </span>
-              {convergences.map((c) => (
-                <span
-                  key={c.ticker}
-                  className="text-xs px-2 py-1 rounded-full font-medium"
-                  style={{
-                    background: "rgba(239,68,68,0.12)",
-                    color: "#fca5a5",
-                    border: "1px solid rgba(239,68,68,0.2)",
-                  }}
-                >
-                  {c.ticker} {c.score}%
+            {phase === "done" && convergences.length > 0 && (
+              <div
+                className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass-card px-4 py-2.5 flex items-center gap-3"
+                style={{ boxShadow: "0 0 30px rgba(239,68,68,0.15)" }}
+              >
+                <span className="text-xs text-text-muted uppercase tracking-widest">
+                  Convergences:
                 </span>
-              ))}
-            </div>
-          )}
+                {convergences.map((c) => (
+                  <span
+                    key={c.ticker}
+                    className="text-xs px-2 py-1 rounded-full font-medium"
+                    style={{
+                      background: "rgba(239,68,68,0.12)",
+                      color: "#fca5a5",
+                      border: "1px solid rgba(239,68,68,0.2)",
+                    }}
+                  >
+                    {c.ticker} {c.score}%
+                  </span>
+                ))}
+              </div>
+            )}
 
-          {phase === "done" && (
-            <button
-              onClick={reset}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-xs text-text-muted hover:text-text px-3 py-1.5 rounded-lg transition-colors"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.06)",
+            {phase === "done" && (
+              <button
+                onClick={reset}
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-xs text-text-muted hover:text-text px-3 py-1.5 rounded-lg transition-colors"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                Reset
+              </button>
+            )}
+
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onInit={(instance) => {
+                rfInstance.current = instance;
               }}
+              fitView={phase !== "pools"}
+              fitViewOptions={{ padding: 0.05 }}
+              minZoom={0.3}
+              maxZoom={2}
+              proOptions={{ hideAttribution: true }}
             >
-              Reset
-            </button>
-          )}
-
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onInit={(instance) => {
-              rfInstance.current = instance;
-            }}
-            fitView={phase !== "pools"}
-            fitViewOptions={{ padding: 0.05 }}
-            minZoom={0.3}
-            maxZoom={2}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background color="rgba(255,255,255,0.03)" gap={24} size={1} />
-            {(phase === "connecting" || phase === "done") && <Controls />}
-          </ReactFlow>
-        </div>
+              <Background color="rgba(255,255,255,0.03)" gap={24} size={1} />
+              {(phase === "connecting" || phase === "done") && <Controls />}
+            </ReactFlow>
+          </div>
+        )}
 
         {/* Value Pool — Right: slides in on hover during graph phase */}
         <div
