@@ -17,6 +17,8 @@ class MongoDB:
             self.client.close()
 
     def get_collection(self, name: str):
+        if self.db is None:
+            raise RuntimeError("MongoDB not connected. Call connect() first.")
         return self.db[name]
 
 

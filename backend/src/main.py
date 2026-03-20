@@ -7,7 +7,7 @@ from src.core.config import settings
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):  # noqa: ARG001
     from src.database.mongodb import mongodb
 
     await mongodb.connect(settings.mongodb_url)
