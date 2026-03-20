@@ -169,14 +169,29 @@ async def think_step(session_id: str):
         new_nodes = []
         new_edges = []
 
-        # For each selected node in the current layer, generate an effect
+        # Group current-layer nodes by sector to create multi-parent effects
         current_layer_nodes = [n for n in parent_nodes if n["layer"] == current_layer]
+
+        # Build sector → nodes map for compound effects
+        sector_nodes: dict[str, list[dict]] = {}
         for parent in current_layer_nodes:
-            effect_id = uuid4().hex[:12]
-            # Include sector info in effect for matching
             sectors = parent.get("metadata", {}).get("sectors", [])
-            sector_str = ", ".join(sectors) if sectors else "general market"
-            effect_content = f"Impact on {sector_str}: {parent['content'][:50]}"
+            if not sectors:
+                sectors = ["general"]
+            for s in sectors:
+                sector_nodes.setdefault(s, []).append(parent)
+
+        # Create one effect per sector — can have multiple parents
+        created_sectors: set[str] = set()
+        for sector, parents_in_sector in sector_nodes.items():
+            if sector in created_sectors:
+                continue
+            created_sectors.add(sector)
+
+            effect_id = uuid4().hex[:12]
+            parent_ids = [p["id"] for p in parents_in_sector]
+            parent_contents = [p["content"][:30] for p in parents_in_sector]
+            effect_content = f"Impact on {sector}: {' + '.join(parent_contents)}"
 
             new_nodes.append(
                 {
@@ -184,20 +199,27 @@ async def think_step(session_id: str):
                     "layer": next_layer,
                     "type": "effect",
                     "content": effect_content,
-                    "reasoning": f"Based on '{parent['content'][:30]}', the {sector_str} sector sees...",
-                    "sources": parent.get("sources", []),
-                    "parents": [parent["id"]],
+                    "reasoning": f"Compound effect from {len(parents_in_sector)} sources on {sector} sector",
+                    "sources": [
+                        s for p in parents_in_sector for s in p.get("sources", [])
+                    ],
+                    "parents": parent_ids,
                     "selected": True,
-                    "metadata": {"derived_from": parent["id"]},
+                    "metadata": {
+                        "sector": sector,
+                        "parent_count": len(parents_in_sector),
+                    },
                 }
             )
-            new_edges.append(
-                {
-                    "source": parent["id"],
-                    "target": effect_id,
-                    "relationship": "causes" if next_layer == 1 else "compounds",
-                }
-            )
+            # Edge from each parent to this effect
+            for pid in parent_ids:
+                new_edges.append(
+                    {
+                        "source": pid,
+                        "target": effect_id,
+                        "relationship": "causes" if next_layer == 1 else "compounds",
+                    }
+                )
 
         # Simulate agent fetching related news
         if session.get("news_pool"):

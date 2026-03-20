@@ -21,7 +21,7 @@ export function LayerSpectrum({
   };
 
   return (
-    <div className="absolute top-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1">
+    <div className="absolute top-[52px] left-1/2 -translate-x-1/2 z-0 flex items-center gap-1">
       {layers.map((layer, idx) => {
         const layerColor =
           LAYER_COLORS[Math.min(layer, LAYER_COLORS.length - 1)];

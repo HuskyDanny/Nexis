@@ -43,6 +43,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   const [highlightedPath, setHighlightedPath] = useState<Set<string>>(
     new Set(),
   );
+  const [pinnedNodeId, setPinnedNodeId] = useState<string | null>(null);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const [isThinking, setIsThinking] = useState(false);
 
@@ -187,7 +188,8 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   );
 
   const handleNodeMouseLeave = useCallback(() => {
-    if (highlightedPath.size === 0) return;
+    // Don't clear if path is pinned
+    if (pinnedNodeId || highlightedPath.size === 0) return;
     setHighlightedPath(new Set());
 
     // Restore saved styles (no layout recalculation)
@@ -205,16 +207,60 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
           : e;
       }),
     );
-  }, [highlightedPath, setNodes, setEdges]);
+  }, [pinnedNodeId, highlightedPath, setNodes, setEdges]);
 
-  // Toggle node selection
+  // Click node: show detail panel + pin/unpin path highlighting
   const handleNodeClick = useCallback(
     async (_: React.MouseEvent, node: RFNode) => {
       if (!session) return;
       const thinkingNode = session.nodes.find((n) => n.id === node.id);
       setSelectedNode(thinkingNode ?? null);
+
+      // Pin/unpin path for opportunity nodes
+      if (thinkingNode?.type === "opportunity") {
+        if (pinnedNodeId === node.id) {
+          // Unpin — restore styles
+          setPinnedNodeId(null);
+          setHighlightedPath(new Set());
+          setNodes((prev) =>
+            prev.map((n) => ({
+              ...n,
+              style: savedStyles.current.nodes.get(n.id) ?? n.style,
+            })),
+          );
+          setEdges((prev) =>
+            prev.map((e) => {
+              const saved = savedStyles.current.edges.get(e.id);
+              return saved
+                ? { ...e, style: saved.style, animated: saved.animated }
+                : e;
+            }),
+          );
+        } else {
+          // Pin — highlight stays
+          setPinnedNodeId(node.id);
+        }
+      } else if (pinnedNodeId) {
+        // Clicking a non-opportunity node unpins
+        setPinnedNodeId(null);
+        setHighlightedPath(new Set());
+        setNodes((prev) =>
+          prev.map((n) => ({
+            ...n,
+            style: savedStyles.current.nodes.get(n.id) ?? n.style,
+          })),
+        );
+        setEdges((prev) =>
+          prev.map((e) => {
+            const saved = savedStyles.current.edges.get(e.id);
+            return saved
+              ? { ...e, style: saved.style, animated: saved.animated }
+              : e;
+          }),
+        );
+      }
     },
-    [session],
+    [session, pinnedNodeId, setNodes, setEdges],
   );
 
   // Toggle node via detail panel
