@@ -88,6 +88,12 @@ export function buildThinkingGraph(
       label: e.relationship,
       type: "smoothstep",
       animated: true,
+      markerEnd: {
+        type: "arrowclosed" as const,
+        color: isMatch ? "rgba(34, 197, 94, 0.6)" : "rgba(255, 255, 255, 0.3)",
+        width: 15,
+        height: 15,
+      },
       style: {
         stroke: isMatch
           ? "rgba(34, 197, 94, 0.4)"

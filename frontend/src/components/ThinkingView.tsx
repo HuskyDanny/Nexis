@@ -209,58 +209,78 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     );
   }, [pinnedNodeId, highlightedPath, setNodes, setEdges]);
 
-  // Click node: show detail panel + pin/unpin path highlighting
+  // Unpin helper — restores all styles
+  const unpinPath = useCallback(() => {
+    setPinnedNodeId(null);
+    setHighlightedPath(new Set());
+    setNodes((prev) =>
+      prev.map((n) => ({
+        ...n,
+        style: savedStyles.current.nodes.get(n.id) ?? n.style,
+      })),
+    );
+    setEdges((prev) =>
+      prev.map((e) => {
+        const saved = savedStyles.current.edges.get(e.id);
+        return saved
+          ? { ...e, style: saved.style, animated: saved.animated }
+          : e;
+      }),
+    );
+  }, [setNodes, setEdges]);
+
+  // Click node: show detail panel. Pin path only for opportunity nodes.
+  // Non-opportunity clicks do NOT unpin — user explores freely while path stays.
   const handleNodeClick = useCallback(
     async (_: React.MouseEvent, node: RFNode) => {
       if (!session) return;
       const thinkingNode = session.nodes.find((n) => n.id === node.id);
       setSelectedNode(thinkingNode ?? null);
 
-      // Pin/unpin path for opportunity nodes
       if (thinkingNode?.type === "opportunity") {
         if (pinnedNodeId === node.id) {
-          // Unpin — restore styles
-          setPinnedNodeId(null);
-          setHighlightedPath(new Set());
-          setNodes((prev) =>
-            prev.map((n) => ({
-              ...n,
-              style: savedStyles.current.nodes.get(n.id) ?? n.style,
-            })),
-          );
-          setEdges((prev) =>
-            prev.map((e) => {
-              const saved = savedStyles.current.edges.get(e.id);
-              return saved
-                ? { ...e, style: saved.style, animated: saved.animated }
-                : e;
-            }),
-          );
+          unpinPath(); // click same opportunity again = unpin
         } else {
-          // Pin — highlight stays
-          setPinnedNodeId(node.id);
+          setPinnedNodeId(node.id); // pin this opportunity's path
+          // Trigger highlight via the hover handler
+          const path = traceAncestors(node.id);
+          setHighlightedPath(path);
+          setNodes((prev) => {
+            for (const n of prev)
+              savedStyles.current.nodes.set(n.id, { ...n.style });
+            return prev.map((n) => ({
+              ...n,
+              style: {
+                ...n.style,
+                opacity: path.has(n.id) ? 1 : 0.15,
+                transition: "opacity 0.3s ease",
+              },
+            }));
+          });
+          setEdges((prev) => {
+            for (const e of prev)
+              savedStyles.current.edges.set(e.id, {
+                style: { ...e.style },
+                animated: !!e.animated,
+              });
+            return prev.map((e) => {
+              const isOnPath = path.has(e.source) && path.has(e.target);
+              return {
+                ...e,
+                style: {
+                  ...e.style,
+                  stroke: isOnPath ? "#f97316" : "rgba(255,255,255,0.05)",
+                  strokeWidth: isOnPath ? 2.5 : 1,
+                },
+                animated: isOnPath,
+              };
+            });
+          });
         }
-      } else if (pinnedNodeId) {
-        // Clicking a non-opportunity node unpins
-        setPinnedNodeId(null);
-        setHighlightedPath(new Set());
-        setNodes((prev) =>
-          prev.map((n) => ({
-            ...n,
-            style: savedStyles.current.nodes.get(n.id) ?? n.style,
-          })),
-        );
-        setEdges((prev) =>
-          prev.map((e) => {
-            const saved = savedStyles.current.edges.get(e.id);
-            return saved
-              ? { ...e, style: saved.style, animated: saved.animated }
-              : e;
-          }),
-        );
       }
+      // Non-opportunity clicks: just show detail panel, don't touch path
     },
-    [session, pinnedNodeId, setNodes, setEdges],
+    [session, pinnedNodeId, unpinPath, traceAncestors, setNodes, setEdges],
   );
 
   // Toggle node via detail panel
@@ -422,6 +442,16 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
           node={selectedNode}
           onClose={() => setSelectedNode(null)}
           onToggle={handleToggle}
+          isPinned={pinnedNodeId === selectedNode.id}
+          onUnpin={pinnedNodeId ? unpinPath : undefined}
+          onRegenerate={
+            !selectedNode.selected
+              ? () => {
+                  handleStep();
+                  setSelectedNode(null);
+                }
+              : undefined
+          }
         />
       )}
     </div>

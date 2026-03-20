@@ -93,10 +93,16 @@ export function NodeDetailPanel({
   node,
   onClose,
   onToggle,
+  isPinned,
+  onUnpin,
+  onRegenerate,
 }: {
   node: ThinkingNode;
   onClose: () => void;
   onToggle: (nodeId: string, selected: boolean) => void;
+  isPinned?: boolean;
+  onUnpin?: () => void;
+  onRegenerate?: () => void;
 }) {
   return (
     <div
@@ -134,7 +140,20 @@ export function NodeDetailPanel({
           ))}
         </div>
       )}
-      <div className="px-4 py-3">
+      <div className="px-4 py-3 flex flex-col gap-2">
+        {isPinned && onUnpin && (
+          <button
+            onClick={onUnpin}
+            className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+            style={{
+              background: "rgba(249,115,22,0.1)",
+              color: "#f97316",
+              border: "1px solid rgba(249,115,22,0.2)",
+            }}
+          >
+            <span>📌</span> Unpin Path
+          </button>
+        )}
         <button
           onClick={() => onToggle(node.id, !node.selected)}
           className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors"
@@ -148,6 +167,19 @@ export function NodeDetailPanel({
         >
           {node.selected ? "Deselect (prune downstream)" : "Re-select"}
         </button>
+        {onRegenerate && !node.selected && (
+          <button
+            onClick={onRegenerate}
+            className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+            style={{
+              background: "rgba(59,130,246,0.1)",
+              color: "#93c5fd",
+              border: "1px solid rgba(59,130,246,0.2)",
+            }}
+          >
+            Regenerate from this layer
+          </button>
+        )}
       </div>
     </div>
   );
