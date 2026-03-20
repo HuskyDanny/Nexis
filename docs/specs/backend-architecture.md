@@ -7,15 +7,16 @@ Every capability is a **skill**. Each skill wraps either direct HTTP calls or pu
 
 ### Lifecycle Hooks
 The pipeline has injectable hooks at every stage. Hooks serve as:
-- **Guardrails**: Prevent LLM from proceeding in wrong direction
+- **Guardrails**: Prevent LLM from proceeding in wrong direction (task guardrails with retry)
 - **Reinforcement**: Inject context or rules when specific events occur
 - **Observability**: Log, trace, alert at each lifecycle stage
+- **Crosscheck**: Flag when tool output contradicts agent analysis
 
 ### Sub-Agents with Character
 Domain-specific sub-agents (news analyst, technical analyst, fundamental analyst) each have:
-- Specialized tool access
-- Distinct system prompts / character
-- A `rules.md` file recording empirical "don'ts" — things that failed, learned over time
+- Specialized tool access (CrewAI Agent + tools)
+- Distinct role, goal, backstory (CrewAI agent character)
+- A `knowledge/rules.md` file recording empirical "don'ts" — loaded via CrewAI Agent knowledge
 - Self-learning: when an agent produces a bad result, the lesson is appended to its rules
 
 ### Deterministic Math — LLM Interprets, Code Calculates
@@ -25,48 +26,65 @@ Financial calculations are **coded functions**, never LLM-generated arithmetic:
 - LLM's role: interpret the numbers, explain the story, never compute the numbers
 - Test coverage mandatory on all financial math functions
 
-## Pipeline (Twice Daily)
+## Agent Framework: CrewAI
+
+**Decision**: CrewAI (Flows + Crews) over LangGraph/PydanticAI.
+
+**Why**:
+- Flows provide pipeline orchestration with `and_`/`or_`/`router` for parallel + conditional execution
+- Agent character (role/goal/backstory) + knowledge (rules.md) is native
+- Task guardrails (function + LLM-based, chained, with retries) = lifecycle hooks
+- LiteLLM backend: model-agnostic (Qwen3, MiniMax 2.5, Claude, OpenAI — swap per agent)
+- Built-in `crewai test` for agent benchmarking with scoring
+- `@before_kickoff` / `@after_kickoff` / task `callback` = lifecycle hooks
+
+## Pipeline (Twice Daily) — CrewAI Flow
 
 **Schedule** (CST):
 - **08:00** — China market (Shanghai/Shenzhen open, overnight US settled)
 - **21:00** — US market (US close + after-hours settle)
 
-```
-1. NEWS COLLECTOR (skill: news-fetch)
-   Fetch from financial news APIs → Raw news events
+```python
+class AnalysisPipelineFlow(Flow[PipelineState]):
+    @start()
+    def collect_news(self):         # Step 1 (parallel)
 
-2. VALUE SCANNER (skill: value-scan)
-   Quantitative screening → Raw value candidates
-   (coded filters, not LLM arithmetic)
+    @start()
+    def scan_values(self):          # Step 2 (parallel)
 
-3. LAYER 1 ANALYSIS (skill: analyze-impact)
-   LLM sub-agents: What does this mean? What's impacted?
-   → Summary, direction, affected sectors/stocks
-   [HOOK: post-analysis guardrail — reject hallucinated tickers]
+    @listen(and_(collect_news, scan_values))
+    def analyze_impacts(self):      # Steps 3-5 (crew per item)
+        # Crew: news_analyst + technical_analyst + fundamental_analyst
+        # Task guardrails reject hallucinated tickers
+        # Tool outputs crosschecked against analysis
 
-4. LAYER 2 VERIFICATION (skill: verify-tools)
-   Coded tools: technical indicators, sentiment, fundamentals
-   → Structured tool outputs (deterministic, crosschecked)
-   [HOOK: crosscheck — flag if tool output contradicts Layer 1]
+    @listen(analyze_impacts)
+    def build_graph(self):          # Step 6 (deterministic code)
 
-5. LAYER 3 SOURCES
-   Attach raw articles, price history, data links
-
-6. GRAPH BUILDER (skill: build-graph)
-   Assemble nodes + edges + detect convergences
-   Compute confidence scores (coded formula, not LLM)
-   [HOOK: post-build — validate graph integrity]
-
-7. EXPORT PRE-RENDER (skill: render-export)
-   Pre-generate markdown for each branch
+    @listen(build_graph)
+    def render_exports(self):       # Step 7 (deterministic code)
 ```
 
-**Orchestration**:
-- Steps 1-2 run in parallel (~2 min)
-- Steps 3-5 parallelized per item, concurrency limit 10 (~15 min)
-- Steps 6-7 sequential (~5 min)
-- Total target: < 30 minutes
-- Per-item resilience: one failure skips that node, never blocks the graph
+## Quality Assurance — Three Layers
+
+### Layer 1: Benchmarks (Pre-Deploy Gate)
+- `crewai test --n_iterations 5` scores each agent 1-10 on known test cases
+- Financial math functions: deterministic unit tests with exact assertions
+- Each tool: expected input → expected output regression tests
+- **Gate**: Agent avg ≥ 7.0 or deploy blocked. Runs in CI before merge.
+
+### Layer 2: Production Metrics (Passive Tracking)
+- Per-step scores stored in `pipeline_runs`: news relevance, scanner precision, convergence accuracy
+- Token usage + cost per agent per run (LiteLLM tracking + Langfuse)
+- Drift detection: compare production scores vs benchmark baseline
+- **Alert**: If step score drops > 15% from baseline
+
+### Layer 3: Functional Workflows (Smoke Tests)
+- Fixture news + market data → pipeline produces valid graph with expected structure
+- Graph has correct node types, edges, convergence detection
+- Export produces valid markdown structure
+- API returns correct response shapes
+- **No LLM quality testing** — just plumbing verification
 
 ## Data Model
 
@@ -77,7 +95,7 @@ Financial calculations are **coded functions**, never LLM-generated arithmetic:
 | **Layer** | node_id, depth (0-3), content, tool_outputs, sources |
 | **Edge** | source_node, target_node, label, relationship_type |
 | **Annotation** | node_id, user_id, text, tags[], created_at |
-| **PipelineRun** | date, market, duration, node_count, error_count, cost |
+| **PipelineRun** | date, market, duration, node_count, error_count, cost, step_scores |
 
 ## API
 
@@ -97,8 +115,10 @@ Financial calculations are **coded functions**, never LLM-generated arithmetic:
 | Layer | Technology |
 |-------|-----------|
 | **Backend** | Python 3.12 + FastAPI + MongoDB + Redis |
-| **AI/LLM** | LangChain + LangGraph, Qwen/DashScope |
+| **Agent Framework** | CrewAI (Flows + Crews) |
+| **LLM Provider** | LiteLLM (Qwen3, MiniMax 2.5, Claude, configurable per agent) |
 | **Observability** | Langfuse (LLM traces) + pipeline_runs collection |
+| **Testing** | crewai test (agent benchmarks) + pytest (functional + math) |
 | **Deployment** | Docker Compose (dev), K8s (prod) |
 
 ## Operational
