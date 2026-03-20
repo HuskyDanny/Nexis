@@ -15,7 +15,15 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { ThinkingSession, ThinkingNode } from "../types/thinking";
-import { buildThinkingGraph } from "../lib/thinking-graph-builder";
+import {
+  buildThinkingGraph,
+  LAYER_COLORS,
+} from "../lib/thinking-graph-builder";
+import {
+  LayerSpectrum,
+  OpportunitiesBanner,
+  NodeDetailPanel,
+} from "./ThinkingPanels";
 import { graphApi } from "../services/api";
 import { createLogger } from "../lib/logger";
 import { AgentFace } from "./AgentFace";
@@ -125,62 +133,79 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     [session],
   );
 
-  // Hover: highlight ancestor path for opportunity nodes
+  // Store original styles for restore (avoids re-running d3-force on mouse leave)
+  const savedStyles = useRef<{
+    nodes: Map<string, React.CSSProperties>;
+    edges: Map<string, { style: React.CSSProperties; animated: boolean }>;
+  }>({ nodes: new Map(), edges: new Map() });
+
+  // Hover: highlight ancestor path — ONLY for opportunity nodes (final layer)
   const handleNodeMouseEnter = useCallback(
     (_: React.MouseEvent, node: RFNode) => {
       if (!session) return;
       const thinkingNode = session.nodes.find((n) => n.id === node.id);
-      if (
-        thinkingNode?.type === "opportunity" ||
-        thinkingNode?.type === "effect"
-      ) {
-        const path = traceAncestors(node.id);
-        setHighlightedPath(path);
+      if (thinkingNode?.type !== "opportunity") return; // only final nodes
 
-        // Update node styles — highlighted nodes get full opacity, others dim
-        setNodes((prev) =>
-          prev.map((n) => ({
-            ...n,
+      const path = traceAncestors(node.id);
+      setHighlightedPath(path);
+
+      // Save current styles before modifying
+      setNodes((prev) => {
+        for (const n of prev)
+          savedStyles.current.nodes.set(n.id, { ...n.style });
+        return prev.map((n) => ({
+          ...n,
+          style: {
+            ...n.style,
+            opacity: path.has(n.id) ? 1 : 0.15,
+            transition: "opacity 0.3s ease",
+          },
+        }));
+      });
+
+      setEdges((prev) => {
+        for (const e of prev)
+          savedStyles.current.edges.set(e.id, {
+            style: { ...e.style },
+            animated: !!e.animated,
+          });
+        return prev.map((e) => {
+          const isOnPath = path.has(e.source) && path.has(e.target);
+          return {
+            ...e,
             style: {
-              ...n.style,
-              opacity: path.has(n.id) ? 1 : 0.15,
-              transition: "opacity 0.3s ease",
+              ...e.style,
+              stroke: isOnPath ? "#f97316" : "rgba(255,255,255,0.05)",
+              strokeWidth: isOnPath ? 2.5 : 1,
             },
-          })),
-        );
-
-        // Update edge styles — highlighted edges glow
-        setEdges((prev) =>
-          prev.map((e) => {
-            const isOnPath = path.has(e.source) && path.has(e.target);
-            return {
-              ...e,
-              style: {
-                ...e.style,
-                stroke: isOnPath ? "#f97316" : "rgba(255,255,255,0.05)",
-                strokeWidth: isOnPath ? 2.5 : 1,
-              },
-              animated: isOnPath,
-            };
-          }),
-        );
-      }
+            animated: isOnPath,
+          };
+        });
+      });
     },
     [session, traceAncestors, setNodes, setEdges],
   );
 
   const handleNodeMouseLeave = useCallback(() => {
+    if (highlightedPath.size === 0) return;
     setHighlightedPath(new Set());
-    // Restore original styles by reloading
-    if (session) {
-      const { rfNodes, rfEdges } = buildThinkingGraph(
-        session.nodes,
-        session.edges,
-      );
-      setNodes(rfNodes);
-      setEdges(rfEdges);
-    }
-  }, [session, setNodes, setEdges]);
+
+    // Restore saved styles (no layout recalculation)
+    setNodes((prev) =>
+      prev.map((n) => ({
+        ...n,
+        style: savedStyles.current.nodes.get(n.id) ?? n.style,
+      })),
+    );
+    setEdges((prev) =>
+      prev.map((e) => {
+        const saved = savedStyles.current.edges.get(e.id);
+        return saved
+          ? { ...e, style: saved.style, animated: saved.animated }
+          : e;
+      }),
+    );
+  }, [highlightedPath, setNodes, setEdges]);
 
   // Toggle node selection
   const handleNodeClick = useCallback(
@@ -215,13 +240,14 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
 
   return (
     <div className="flex-1 relative">
-      {/* Ring guides — subtle concentric circles */}
+      {/* Ring guides — colored concentric circles per layer */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none z-0"
-        style={{ opacity: 0.15 }}
+        style={{ opacity: 0.2 }}
       >
         {Array.from({ length: maxLayer + 2 }, (_, i) => {
           const r = i * 140;
+          const layerColor = LAYER_COLORS[Math.min(i, LAYER_COLORS.length - 1)];
           return r > 0 ? (
             <circle
               key={i}
@@ -229,13 +255,16 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
               cy="50%"
               r={r}
               fill="none"
-              stroke="rgba(255,255,255,0.15)"
+              stroke={layerColor}
               strokeWidth={1}
               strokeDasharray="4 8"
+              opacity={0.4}
             />
           ) : null;
         })}
       </svg>
+
+      <LayerSpectrum session={session} />
 
       {/* Controls bar */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
@@ -308,31 +337,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
         </button>
       </div>
 
-      {/* Opportunities banner */}
-      {session?.status === "complete" &&
-        (() => {
-          const opps = session.nodes.filter((n) => n.type === "opportunity");
-          return opps.length > 0 ? (
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 glass-card px-4 py-2.5 flex items-center gap-3">
-              <span className="text-xs text-text-muted uppercase tracking-widest">
-                Opportunities:
-              </span>
-              {opps.map((o) => (
-                <span
-                  key={o.id}
-                  className="text-xs px-2 py-1 rounded-full font-medium"
-                  style={{
-                    background: "rgba(34,197,94,0.12)",
-                    color: "#86efac",
-                    border: "1px solid rgba(34,197,94,0.2)",
-                  }}
-                >
-                  {o.content}
-                </span>
-              ))}
-            </div>
-          ) : null;
-        })()}
+      <OpportunitiesBanner session={session} />
 
       {/* Agent face during thinking */}
       {isThinking && (
@@ -366,70 +371,12 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
         <Controls />
       </ReactFlow>
 
-      {/* Node detail panel */}
       {selectedNode && (
-        <div
-          className="absolute top-4 right-4 w-80 max-h-[70vh] overflow-y-auto glass-card shadow-2xl z-30"
-          style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.5)" }}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div>
-              <span className="text-[10px] uppercase tracking-widest text-text-muted">
-                Layer {selectedNode.layer} · {selectedNode.type}
-              </span>
-              <h3 className="text-sm font-semibold mt-1">
-                {selectedNode.content}
-              </h3>
-            </div>
-            <button
-              onClick={() => setSelectedNode(null)}
-              className="text-text-muted hover:text-text"
-            >
-              &times;
-            </button>
-          </div>
-          {selectedNode.reasoning && (
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[10px] uppercase tracking-widest text-text-muted mb-1">
-                Reasoning
-              </div>
-              <p className="text-xs leading-relaxed">
-                {selectedNode.reasoning}
-              </p>
-            </div>
-          )}
-          {selectedNode.sources.length > 0 && (
-            <div className="px-4 py-3 border-b border-border">
-              <div className="text-[10px] uppercase tracking-widest text-text-muted mb-1">
-                Sources
-              </div>
-              {selectedNode.sources.map((s, i) => (
-                <p key={i} className="text-xs" style={{ color: "#ef4444" }}>
-                  {s}
-                </p>
-              ))}
-            </div>
-          )}
-          <div className="px-4 py-3">
-            <button
-              onClick={() =>
-                handleToggle(selectedNode.id, !selectedNode.selected)
-              }
-              className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-              style={{
-                background: selectedNode.selected
-                  ? "rgba(239,68,68,0.1)"
-                  : "rgba(34,197,94,0.1)",
-                color: selectedNode.selected ? "#fca5a5" : "#86efac",
-                border: `1px solid ${selectedNode.selected ? "rgba(239,68,68,0.2)" : "rgba(34,197,94,0.2)"}`,
-              }}
-            >
-              {selectedNode.selected
-                ? "Deselect (prune downstream)"
-                : "Re-select"}
-            </button>
-          </div>
-        </div>
+        <NodeDetailPanel
+          node={selectedNode}
+          onClose={() => setSelectedNode(null)}
+          onToggle={handleToggle}
+        />
       )}
     </div>
   );

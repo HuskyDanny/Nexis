@@ -12,10 +12,24 @@ const TYPE_COLORS: Record<string, string> = {
   opportunity: "#22c55e",
 };
 
-export { TYPE_COLORS };
+// Layer colors — cool to warm as thinking deepens
+const LAYER_COLORS: string[] = [
+  "#3b82f6", // Layer 0: blue (news/seed)
+  "#8b5cf6", // Layer 1: purple (immediate effects)
+  "#f59e0b", // Layer 2: amber (compounding)
+  "#ef4444", // Layer 3: red (deep compounding)
+  "#22c55e", // Layer 4+: green (opportunities)
+];
 
-function nodeStyle(type: string, selected: boolean): React.CSSProperties {
-  const color = TYPE_COLORS[type] ?? "#6b7394";
+export { TYPE_COLORS, LAYER_COLORS };
+
+function nodeStyle(
+  type: string,
+  selected: boolean,
+  layer: number = 0,
+): React.CSSProperties {
+  const layerColor = LAYER_COLORS[Math.min(layer, LAYER_COLORS.length - 1)];
+  const color = type === "opportunity" ? TYPE_COLORS.opportunity : layerColor;
   const isOpp = type === "opportunity";
   return {
     background: isOpp
@@ -28,7 +42,7 @@ function nodeStyle(type: string, selected: boolean): React.CSSProperties {
     border: isOpp
       ? "2px solid rgba(34, 197, 94, 0.4)"
       : `1px solid ${selected ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)"}`,
-    borderLeft: type === "news" ? `3px solid ${color}` : undefined,
+    borderLeft: !isOpp ? `3px solid ${color}` : undefined,
     borderRadius: isOpp ? 16 : 12,
     padding: "10px 14px",
     fontSize: 12,
@@ -59,7 +73,7 @@ export function buildThinkingGraph(
       selected: n.selected,
       reasoning: n.reasoning,
     },
-    style: nodeStyle(n.type, n.selected),
+    style: nodeStyle(n.type, n.selected, n.layer),
   }));
 
   // Build React Flow edges
@@ -89,15 +103,15 @@ export function buildThinkingGraph(
     };
   });
 
-  // Apply concentric ring layout
+  // Apply concentric ring layout — strong repulsion to prevent overlap
   const layerMap = new Map(nodes.map((n) => [n.id, n.layer]));
   const layoutNodes = layoutGraph(rfNodes, rfEdges, {
-    chargeStrength: -300,
+    chargeStrength: -600,
     linkDistance: 150,
-    collideRadius: 70,
-    iterations: 100,
+    collideRadius: 100,
+    iterations: 150,
     layerMap,
-    layerRadius: 140,
+    layerRadius: 180,
   });
 
   return { rfNodes: layoutNodes, rfEdges };
