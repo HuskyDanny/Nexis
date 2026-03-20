@@ -13,6 +13,16 @@ services:
       REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: development
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://backend:8000
+
   mongodb:
     image: mongo:7.0
     ports:
