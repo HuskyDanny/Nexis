@@ -167,7 +167,10 @@ async def think_effects(
             from src.agents.thinking_crew import think_effects as real_think
 
             log.info("Using real CrewAI agents for layer %d", next_layer)
-            return real_think(current_layer_nodes, news_pool, next_layer)
+            nodes, edges = real_think(current_layer_nodes, news_pool, next_layer)
+            if nodes:  # Only use if agents produced results
+                return nodes, edges
+            log.warning("Real agents produced 0 nodes, falling back to mock")
         except Exception as e:
             log.error("Real agent failed, falling back to mock: %s", e)
 
@@ -188,7 +191,10 @@ async def match_opportunities(
             from src.agents.thinking_crew import match_opportunities as real_match
 
             log.info("Using real CrewAI agents for matching")
-            return real_match(final_effects, value_pool)
+            opps, edges = real_match(final_effects, value_pool)
+            if opps:
+                return opps, edges
+            log.warning("Real agent matching produced 0 results, falling back to mock")
         except Exception as e:
             log.error("Real agent matching failed, falling back to mock: %s", e)
 
