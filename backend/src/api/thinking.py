@@ -123,6 +123,7 @@ async def start_thinking(req: StartRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "news_pool": news_items,
         "value_pool": value_items,
+        "layer_cache": {},
     }
 
     col = mongodb.get_collection("thinking_sessions")
