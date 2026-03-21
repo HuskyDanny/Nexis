@@ -125,3 +125,78 @@ class TestStepCacheWrite:
             assert cache_key in set_doc
             assert set_doc[cache_key]["nodes"] == new_nodes
             assert set_doc[cache_key]["edges"] == new_edges
+
+
+class TestToggleReselect:
+    """Re-selecting a node should restore cached children."""
+
+    @pytest.mark.asyncio
+    async def test_reselect_restores_cached_children(self):
+        n1 = _news("n1", selected=True)
+        n2 = _news("n2", selected=False)
+        e1 = _effect("e1", 1, ["n1", "n2"], selected=False)
+        edges = [_edge("n1", "e1"), _edge("n2", "e1")]
+
+        ps_hash = parent_set_hash(["n1", "n2"])
+        cache = {
+            "1": {
+                ps_hash: {
+                    "nodes": [_effect("e1", 1, ["n1", "n2"])],
+                    "edges": edges,
+                }
+            }
+        }
+        session = _make_session([n1, n2, e1], edges, layer=1, layer_cache=cache)
+
+        mock_col = MagicMock()
+        mock_col.find_one = AsyncMock(return_value=session)
+        mock_col.update_one = AsyncMock()
+
+        import sys
+
+        if "src.api.thinking" in sys.modules:
+            del sys.modules["src.api.thinking"]
+
+        with patch("src.database.mongodb.mongodb") as mock_db:
+            mock_db.get_collection.return_value = mock_col
+
+            from src.api.thinking import toggle_node, ToggleRequest
+
+            result = await toggle_node(
+                "test_session", "n2", ToggleRequest(selected=True)
+            )
+
+            assert n2["selected"] is True
+            assert e1["selected"] is True  # restored from cache
+            assert result.dirty_count > 0
+
+    @pytest.mark.asyncio
+    async def test_reselect_no_cache_no_restore(self):
+        n1 = _news("n1", selected=True)
+        n2 = _news("n2", selected=False)
+        e1 = _effect("e1", 1, ["n1", "n2"], selected=False)
+        edges = [_edge("n1", "e1"), _edge("n2", "e1")]
+
+        session = _make_session([n1, n2, e1], edges, layer=1, layer_cache={})
+
+        mock_col = MagicMock()
+        mock_col.find_one = AsyncMock(return_value=session)
+        mock_col.update_one = AsyncMock()
+
+        import sys
+
+        if "src.api.thinking" in sys.modules:
+            del sys.modules["src.api.thinking"]
+
+        with patch("src.database.mongodb.mongodb") as mock_db:
+            mock_db.get_collection.return_value = mock_col
+
+            from src.api.thinking import toggle_node, ToggleRequest
+
+            result = await toggle_node(
+                "test_session", "n2", ToggleRequest(selected=True)
+            )
+
+            assert n2["selected"] is True
+            assert e1["selected"] is False  # no cache, stays deselected
+            assert result.dirty_count == 0

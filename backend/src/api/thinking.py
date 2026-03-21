@@ -270,10 +270,9 @@ async def toggle_node(session_id: str, node_id: str, req: ToggleRequest):
 
     target_node["selected"] = req.selected
 
-    # Compute dirty set — all descendants of this node
     dirty_count = 0
     if not req.selected:
-        # BFS to find all downstream nodes
+        # === DESELECT: BFS cascade (existing, unchanged) ===
         dirty_ids = set()
         queue = [node_id]
         edge_map: dict[str, list[str]] = {}
@@ -287,11 +286,36 @@ async def toggle_node(session_id: str, node_id: str, req: ToggleRequest):
                     dirty_ids.add(child)
                     queue.append(child)
 
-        # Mark all dirty nodes as deselected
         for n in nodes:
             if n["id"] in dirty_ids:
                 n["selected"] = False
                 dirty_count += 1
+
+    else:
+        # === RE-SELECT: check cache layer by layer ===
+        from src.services.cache import parent_set_hash
+
+        layer_cache = session.get("layer_cache", {})
+        target_layer = target_node["layer"]
+        max_layer = max((n["layer"] for n in nodes), default=0)
+
+        for check_layer in range(target_layer + 1, max_layer + 1):
+            selected_parents = sorted(
+                n["id"]
+                for n in nodes
+                if n["selected"] and n["layer"] == check_layer - 1
+            )
+            ps_hash = parent_set_hash(selected_parents)
+
+            cached = layer_cache.get(str(check_layer), {}).get(ps_hash)
+            if not cached:
+                break
+
+            cached_ids = {cn["id"] for cn in cached["nodes"]}
+            for n in nodes:
+                if n["id"] in cached_ids and not n["selected"]:
+                    n["selected"] = True
+                    dirty_count += 1
 
     await col.update_one({"id": session_id}, {"$set": {"nodes": nodes}})
     log.info(
