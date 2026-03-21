@@ -162,100 +162,20 @@ async def think_step(session_id: str):
         parent_nodes = [
             n for n in session["nodes"] if n["selected"] and n["layer"] <= current_layer
         ]
-
-        # --- Mock agentic reasoning (replace with CrewAI in Plan B) ---
-        from uuid import uuid4
-
-        new_nodes = []
-        new_edges = []
-
-        # Group current-layer nodes by sector to create multi-parent effects
         current_layer_nodes = [n for n in parent_nodes if n["layer"] == current_layer]
+        existing_ids = {n["id"] for n in session["nodes"]}
+        news_pool = session.get("news_pool", [])
 
-        # Build sector → nodes map for compound effects
-        sector_nodes: dict[str, list[dict]] = {}
-        for parent in current_layer_nodes:
-            sectors = parent.get("metadata", {}).get("sectors", [])
-            if not sectors:
-                sectors = ["general"]
-            for s in sectors:
-                sector_nodes.setdefault(s, []).append(parent)
+        # Dispatch to thinking service (real agents or mock fallback)
+        from src.services.thinking_service import think_effects
 
-        # Create one effect per sector — can have multiple parents
-        created_sectors: set[str] = set()
-        for sector, parents_in_sector in sector_nodes.items():
-            if sector in created_sectors:
-                continue
-            created_sectors.add(sector)
-
-            effect_id = uuid4().hex[:12]
-            parent_ids = [p["id"] for p in parents_in_sector]
-            parent_contents = [p["content"][:30] for p in parents_in_sector]
-            effect_content = f"Impact on {sector}: {' + '.join(parent_contents)}"
-
-            new_nodes.append(
-                {
-                    "id": effect_id,
-                    "layer": next_layer,
-                    "type": "effect",
-                    "content": effect_content,
-                    "reasoning": f"Compound effect from {len(parents_in_sector)} sources on {sector} sector",
-                    "sources": [
-                        s for p in parents_in_sector for s in p.get("sources", [])
-                    ],
-                    "parents": parent_ids,
-                    "selected": True,
-                    "metadata": {
-                        "sector": sector,
-                        "parent_count": len(parents_in_sector),
-                    },
-                }
-            )
-            # Edge from each parent to this effect
-            for pid in parent_ids:
-                new_edges.append(
-                    {
-                        "source": pid,
-                        "target": effect_id,
-                        "relationship": "causes" if next_layer == 1 else "compounds",
-                    }
-                )
-
-        # Simulate agent fetching related news
-        if session.get("news_pool"):
-            import random
-
-            pool = session["news_pool"]
-            existing_ids = {n["id"] for n in session["nodes"]}
-            available = [n for n in pool if n["id"] not in existing_ids]
-            if available:
-                fetched = random.choice(available)
-                fetch_id = f"fetch-{uuid4().hex[:8]}"
-                new_nodes.append(
-                    {
-                        "id": fetch_id,
-                        "layer": next_layer,
-                        "type": "fetch",
-                        "content": f"Related: {fetched.get('title', fetched.get('summary', ''))}",
-                        "reasoning": "Agent fetched this related news for additional context",
-                        "sources": [fetched.get("url", "")],
-                        "parents": (
-                            [current_layer_nodes[0]["id"]]
-                            if current_layer_nodes
-                            else []
-                        ),
-                        "selected": True,
-                        "metadata": fetched,
-                    }
-                )
-                if current_layer_nodes:
-                    new_edges.append(
-                        {
-                            "source": current_layer_nodes[0]["id"],
-                            "target": fetch_id,
-                            "relationship": "fetched_for",
-                        }
-                    )
+        new_nodes, new_edges = await think_effects(
+            parent_nodes,
+            news_pool,
+            current_layer_nodes,
+            next_layer,
+            existing_ids,
+        )
 
         # Persist new nodes and edges
         if new_nodes:
@@ -382,50 +302,14 @@ async def match_values(session_id: str):
         len(value_pool),
     )
 
-    # --- Mock matching (replace with CrewAI in Plan B) ---
-    from uuid import uuid4
-
-    def _convergence_score(
-        sentiment: float, discount: float, agreement: float
-    ) -> float:
-        return round(min(100.0, sentiment * 0.3 + discount * 0.3 + agreement * 0.4), 1)
-
-    opportunities = []
-    new_edges = []
     opp_layer = current_layer + 1
 
-    for val in value_pool:
-        # Simple: if any effect mentions the value's sector, it's a match
-        for effect in final_effects:
-            effect_text = (
-                effect.get("content", "") + " " + effect.get("reasoning", "")
-            ).lower()
-            sector = val.get("sector", "").lower()
-            if sector and sector in effect_text:
-                score = _convergence_score(70.0, val.get("discount_pct", 0), 75.0)
-                if score >= 50:
-                    opp_id = f"opp-{uuid4().hex[:8]}"
-                    opportunities.append(
-                        {
-                            "id": opp_id,
-                            "layer": opp_layer,
-                            "type": "opportunity",
-                            "content": f"{val.get('ticker', '?')} — {score}% conviction",
-                            "reasoning": f"Matched via {sector} sector. Effect: {effect['content'][:50]}",
-                            "sources": [],
-                            "parents": [effect["id"]],
-                            "selected": True,
-                            "metadata": {**val, "convergence_score": score},
-                        }
-                    )
-                    new_edges.append(
-                        {
-                            "source": effect["id"],
-                            "target": opp_id,
-                            "relationship": "matches",
-                        }
-                    )
-                    break  # one opportunity per value stock
+    # Dispatch to thinking service (real agents or mock fallback)
+    from src.services.thinking_service import match_opportunities
+
+    opportunities, new_edges = await match_opportunities(
+        final_effects, value_pool, opp_layer
+    )
 
     # Persist
     if opportunities:
