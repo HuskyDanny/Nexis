@@ -27,6 +27,7 @@ import {
 import { graphApi } from "../services/api";
 import { createLogger } from "../lib/logger";
 import { AgentFace } from "./AgentFace";
+import { usePathHighlight } from "../hooks/usePathHighlight";
 
 const log = createLogger("thinking-view");
 
@@ -40,12 +41,16 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
   const [selectedNode, setSelectedNode] = useState<ThinkingNode | null>(null);
-  const [highlightedPath, setHighlightedPath] = useState<Set<string>>(
-    new Set(),
-  );
-  const [pinnedNodeId, setPinnedNodeId] = useState<string | null>(null);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+
+  const {
+    pinnedNodeId,
+    unpinPath,
+    pinPath,
+    handleNodeMouseEnter,
+    handleNodeMouseLeave,
+  } = usePathHighlight({ session, setNodes, setEdges });
 
   // Load session
   const loadSession = useCallback(async () => {
@@ -106,131 +111,39 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     setIsThinking(false);
   }, [sessionId, session, isThinking, loadSession]);
 
-  // Trace ancestor path from a node back to roots (for hover highlighting)
-  const traceAncestors = useCallback(
-    (nodeId: string): Set<string> => {
-      if (!session) return new Set();
-      const ancestors = new Set<string>();
-      const queue = [nodeId];
-      ancestors.add(nodeId);
+  // Pane click: useCallback to avoid stale closure in React Flow
+  const handlePaneClick = useCallback(() => {
+    unpinPath();
+    setSelectedNode(null);
+  }, [unpinPath]);
 
-      // Build reverse edge map: target → sources
-      const parentMap: Record<string, string[]> = {};
-      for (const e of session.edges) {
-        (parentMap[e.target] ??= []).push(e.source);
+  // Fallback: container div click also dismisses if target is the pane itself
+  // (not a node or edge inside the pane — those are handled by onNodeClick)
+  const handleContainerClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      // Only fire if clicking directly on the pane background, not on nodes/edges/UI
+      if (
+        target.classList.contains("react-flow__pane") ||
+        target.classList.contains("react-flow__renderer")
+      ) {
+        unpinPath();
+        setSelectedNode(null);
       }
-
-      while (queue.length > 0) {
-        const current = queue.shift()!;
-        for (const parent of parentMap[current] ?? []) {
-          if (!ancestors.has(parent)) {
-            ancestors.add(parent);
-            queue.push(parent);
-          }
-        }
-      }
-      return ancestors;
     },
-    [session],
+    [unpinPath],
   );
 
-  // Store original styles for restore (avoids re-running d3-force on mouse leave)
-  const savedStyles = useRef<{
-    nodes: Map<string, React.CSSProperties>;
-    edges: Map<string, { style: React.CSSProperties; animated: boolean }>;
-  }>({ nodes: new Map(), edges: new Map() });
-
-  // Hover: highlight ancestor path — ONLY for opportunity nodes (final layer)
-  const handleNodeMouseEnter = useCallback(
-    (_: React.MouseEvent, node: RFNode) => {
-      if (!session) return;
-      const thinkingNode = session.nodes.find((n) => n.id === node.id);
-      if (thinkingNode?.type !== "opportunity") return; // only final nodes
-
-      const path = traceAncestors(node.id);
-      setHighlightedPath(path);
-
-      // Save current styles before modifying
-      setNodes((prev) => {
-        for (const n of prev)
-          savedStyles.current.nodes.set(n.id, { ...n.style });
-        return prev.map((n) => ({
-          ...n,
-          style: {
-            ...n.style,
-            opacity: path.has(n.id) ? 1 : 0.15,
-            transition: "opacity 0.3s ease",
-          },
-        }));
-      });
-
-      setEdges((prev) => {
-        for (const e of prev)
-          savedStyles.current.edges.set(e.id, {
-            style: { ...e.style },
-            animated: !!e.animated,
-          });
-        return prev.map((e) => {
-          const isOnPath = path.has(e.source) && path.has(e.target);
-          return {
-            ...e,
-            style: {
-              ...e.style,
-              stroke: isOnPath ? "#f97316" : "rgba(255,255,255,0.05)",
-              strokeWidth: isOnPath ? 2.5 : 1,
-            },
-            animated: isOnPath,
-          };
-        });
-      });
-    },
-    [session, traceAncestors, setNodes, setEdges],
-  );
-
-  const handleNodeMouseLeave = useCallback(() => {
-    // Don't clear if path is pinned
-    if (pinnedNodeId || highlightedPath.size === 0) return;
-    setHighlightedPath(new Set());
-
-    // Restore saved styles (no layout recalculation)
-    setNodes((prev) =>
-      prev.map((n) => ({
-        ...n,
-        style: savedStyles.current.nodes.get(n.id) ?? n.style,
-      })),
-    );
-    setEdges((prev) =>
-      prev.map((e) => {
-        const saved = savedStyles.current.edges.get(e.id);
-        return saved
-          ? { ...e, style: saved.style, animated: saved.animated }
-          : e;
-      }),
-    );
-  }, [pinnedNodeId, highlightedPath, setNodes, setEdges]);
-
-  // Unpin helper — restores all styles
-  const unpinPath = useCallback(() => {
-    setPinnedNodeId(null);
-    setHighlightedPath(new Set());
-    setNodes((prev) =>
-      prev.map((n) => ({
-        ...n,
-        style: savedStyles.current.nodes.get(n.id) ?? n.style,
-      })),
-    );
-    setEdges((prev) =>
-      prev.map((e) => {
-        const saved = savedStyles.current.edges.get(e.id);
-        return saved
-          ? { ...e, style: saved.style, animated: saved.animated }
-          : e;
-      }),
-    );
-  }, [setNodes, setEdges]);
+  // Escape key also clears selectedNode (hook handles unpinPath)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedNode(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Click node: show detail panel. Pin path only for opportunity nodes.
-  // Non-opportunity clicks do NOT unpin — user explores freely while path stays.
   const handleNodeClick = useCallback(
     async (_: React.MouseEvent, node: RFNode) => {
       if (!session) return;
@@ -239,48 +152,13 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
 
       if (thinkingNode?.type === "opportunity") {
         if (pinnedNodeId === node.id) {
-          unpinPath(); // click same opportunity again = unpin
+          unpinPath();
         } else {
-          setPinnedNodeId(node.id); // pin this opportunity's path
-          // Trigger highlight via the hover handler
-          const path = traceAncestors(node.id);
-          setHighlightedPath(path);
-          setNodes((prev) => {
-            for (const n of prev)
-              savedStyles.current.nodes.set(n.id, { ...n.style });
-            return prev.map((n) => ({
-              ...n,
-              style: {
-                ...n.style,
-                opacity: path.has(n.id) ? 1 : 0.15,
-                transition: "opacity 0.3s ease",
-              },
-            }));
-          });
-          setEdges((prev) => {
-            for (const e of prev)
-              savedStyles.current.edges.set(e.id, {
-                style: { ...e.style },
-                animated: !!e.animated,
-              });
-            return prev.map((e) => {
-              const isOnPath = path.has(e.source) && path.has(e.target);
-              return {
-                ...e,
-                style: {
-                  ...e.style,
-                  stroke: isOnPath ? "#f97316" : "rgba(255,255,255,0.05)",
-                  strokeWidth: isOnPath ? 2.5 : 1,
-                },
-                animated: isOnPath,
-              };
-            });
-          });
+          pinPath(node.id);
         }
       }
-      // Non-opportunity clicks: just show detail panel, don't touch path
     },
-    [session, pinnedNodeId, unpinPath, traceAncestors, setNodes, setEdges],
+    [session, pinnedNodeId, unpinPath, pinPath],
   );
 
   // Toggle node via detail panel
@@ -305,7 +183,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   const maxLayer = Math.max(0, ...(session?.nodes.map((n) => n.layer) ?? [0]));
 
   return (
-    <div className="flex-1 relative">
+    <div className="flex-1 relative" onClick={handleContainerClick}>
       {/* Ring guides — colored concentric circles per layer */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none z-0"
@@ -424,10 +302,8 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
         onNodeClick={handleNodeClick}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
-        onPaneClick={() => {
-          if (pinnedNodeId) unpinPath();
-          setSelectedNode(null);
-        }}
+        paneClickDistance={5}
+        onPaneClick={handlePaneClick}
         onInit={(instance) => {
           rfInstance.current = instance;
         }}

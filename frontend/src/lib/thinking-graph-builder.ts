@@ -23,7 +23,7 @@ const LAYER_COLORS: string[] = [
 
 export { TYPE_COLORS, LAYER_COLORS };
 
-function nodeStyle(
+export function nodeStyle(
   type: string,
   selected: boolean,
   layer: number = 0,
