@@ -84,3 +84,44 @@ class TestSessionInit:
         session_doc = insert_call[0][0]
         assert "layer_cache" in session_doc
         assert session_doc["layer_cache"] == {}
+
+
+class TestStepCacheWrite:
+    """step endpoint should write generated children to layer_cache."""
+
+    @pytest.mark.asyncio
+    async def test_step_writes_to_layer_cache(self):
+        nodes = [_news("n1"), _news("n2")]
+        session = _make_session(nodes, [], layer=0)
+
+        mock_col = MagicMock()
+        mock_col.find_one = AsyncMock(return_value=session)
+        mock_col.update_one = AsyncMock()
+
+        new_nodes = [_effect("e1", 1, ["n1", "n2"])]
+        new_edges = [_edge("n1", "e1"), _edge("n2", "e1")]
+
+        import importlib
+        import sys
+
+        if "src.api.thinking" in sys.modules:
+            del sys.modules["src.api.thinking"]
+
+        with patch("src.database.mongodb.mongodb") as mock_db, patch(
+            "src.services.thinking_service.think_effects", new_callable=AsyncMock
+        ) as mock_think:
+            mock_db.get_collection.return_value = mock_col
+            mock_think.return_value = (new_nodes, new_edges)
+
+            from src.api.thinking import think_step
+
+            await think_step("test_session")
+
+            update_call = mock_col.update_one.call_args_list[-1]
+            update_doc = update_call[0][1]
+            set_doc = update_doc.get("$set", {})
+            expected_hash = parent_set_hash(["n1", "n2"])
+            cache_key = f"layer_cache.1.{expected_hash}"
+            assert cache_key in set_doc
+            assert set_doc[cache_key]["nodes"] == new_nodes
+            assert set_doc[cache_key]["edges"] == new_edges
