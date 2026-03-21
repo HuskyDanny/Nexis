@@ -18,7 +18,26 @@ ALPHA_VANTAGE_KEY = os.environ.get(
 
 
 async def fetch_real_news(limit: int = 10, topics: str = "") -> list[dict]:
-    """Fetch news from Alpha Vantage NEWS_SENTIMENT endpoint."""
+    """Fetch news — Perigon first (AI-native, pre-classified), Alpha Vantage fallback."""
+    # Try Perigon first (cached, rate-limited)
+    try:
+        from src.services.perigon import fetch_perigon_news
+
+        query = topics if topics else "economy markets geopolitical finance"
+        perigon_news = await fetch_perigon_news(query=query, size=limit)
+        if perigon_news:
+            log.info(
+                "Using Perigon news (%d articles, pre-classified)", len(perigon_news)
+            )
+            return perigon_news
+    except Exception as e:
+        log.debug("Perigon unavailable, falling back to Alpha Vantage: %s", e)
+
+    return await _fetch_alpha_vantage_news(limit=limit, topics=topics)
+
+
+async def _fetch_alpha_vantage_news(limit: int = 10, topics: str = "") -> list[dict]:
+    """Fallback: Fetch news from Alpha Vantage NEWS_SENTIMENT endpoint."""
     try:
         params: dict[str, Any] = {
             "function": "NEWS_SENTIMENT",

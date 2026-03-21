@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
     siliconflow_api_key: str = ""
+    perigon_api_key: str = ""
 
     model_config = {"env_file": [".env.base", ".env"], "env_file_encoding": "utf-8"}
 
