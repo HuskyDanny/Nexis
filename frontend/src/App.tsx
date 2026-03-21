@@ -154,7 +154,20 @@ function App() {
     });
   }, []);
 
-  // Start thinking session
+  // Auto-run: select top news → think all layers → match (one click)
+  const autoRun = useCallback(async () => {
+    log.info("Auto-run: full pipeline");
+    try {
+      const res = await graphApi.autoThink(todayDate(), "US", 3);
+      setThinkingSessionId(res.data.session_id);
+      setPhase("thinking");
+      log.info("Auto session started:", res.data.session_id);
+    } catch (err) {
+      log.error("Auto-run failed:", err);
+    }
+  }, []);
+
+  // Start thinking session (manual selection)
   const startThinking = useCallback(async () => {
     if (selectedNews.size === 0) return;
     log.info("Starting thinking session with", selectedNews.size, "news");
@@ -293,30 +306,41 @@ function App() {
                 <div className="flex flex-col items-center gap-6 pointer-events-auto">
                   <AgentFace size={64} />
                   <p className="text-text-muted text-sm tracking-wide">
-                    Select news, then start thinking
+                    Select news manually, or auto-run
                   </p>
-                  <button
-                    onClick={startThinking}
-                    disabled={selectedNews.size === 0}
-                    className="px-6 py-2.5 rounded-lg text-sm font-medium tracking-wide transition-all duration-300"
-                    style={{
-                      background:
-                        selectedNews.size > 0
-                          ? "rgba(249, 115, 22, 0.15)"
-                          : "rgba(255,255,255,0.03)",
-                      color: selectedNews.size > 0 ? "#f97316" : "#6b7394",
-                      border: `1px solid ${selectedNews.size > 0 ? "rgba(249,115,22,0.3)" : "rgba(255,255,255,0.06)"}`,
-                      cursor: selectedNews.size > 0 ? "pointer" : "not-allowed",
-                      boxShadow:
-                        selectedNews.size > 0
-                          ? "0 0 20px rgba(249,115,22,0.1)"
-                          : "none",
-                    }}
-                  >
-                    {selectedNews.size > 0
-                      ? `Start Thinking (${selectedNews.size} news)`
-                      : "Select news to start"}
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={autoRun}
+                      className="px-6 py-2.5 rounded-lg text-sm font-medium tracking-wide transition-all duration-300"
+                      style={{
+                        background: "rgba(34, 197, 94, 0.15)",
+                        color: "#22c55e",
+                        border: "1px solid rgba(34,197,94,0.3)",
+                        boxShadow: "0 0 20px rgba(34,197,94,0.1)",
+                      }}
+                    >
+                      Run Auto
+                    </button>
+                    <button
+                      onClick={startThinking}
+                      disabled={selectedNews.size === 0}
+                      className="px-5 py-2.5 rounded-lg text-xs font-medium tracking-wide transition-all duration-300"
+                      style={{
+                        background:
+                          selectedNews.size > 0
+                            ? "rgba(249, 115, 22, 0.15)"
+                            : "rgba(255,255,255,0.03)",
+                        color: selectedNews.size > 0 ? "#f97316" : "#6b7394",
+                        border: `1px solid ${selectedNews.size > 0 ? "rgba(249,115,22,0.3)" : "rgba(255,255,255,0.06)"}`,
+                        cursor:
+                          selectedNews.size > 0 ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      {selectedNews.size > 0
+                        ? `Manual (${selectedNews.size})`
+                        : "Select news"}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

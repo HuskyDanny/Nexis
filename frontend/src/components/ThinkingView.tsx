@@ -83,6 +83,15 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     loadSession();
   }, [loadSession]);
 
+  // Poll for updates when status is "thinking" (auto mode)
+  useEffect(() => {
+    if (session?.status !== "thinking") return;
+    const interval = setInterval(() => {
+      loadSession();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [session?.status, loadSession]);
+
   // Step to next layer
   const handleStep = useCallback(async () => {
     if (isThinking || !session) return;

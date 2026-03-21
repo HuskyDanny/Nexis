@@ -66,4 +66,10 @@ export const graphApi = {
     ),
   matchValues: (sessionId: string) =>
     api.post<{ opportunities: ThinkingNode[] }>(`/thinking/${sessionId}/match`),
+  autoThink: (date: string, market: Market = "US", maxDepth: number = 3) =>
+    api.post<{ session_id: string; status: string }>("/thinking/auto", {
+      date,
+      market,
+      max_depth: maxDepth,
+    }),
 };
