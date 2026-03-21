@@ -93,15 +93,11 @@ export function NodeDetailPanel({
   node,
   onClose,
   onToggle,
-  isPinned,
-  onUnpin,
   onRegenerate,
 }: {
   node: ThinkingNode;
   onClose: () => void;
   onToggle: (nodeId: string, selected: boolean) => void;
-  isPinned?: boolean;
-  onUnpin?: () => void;
   onRegenerate?: () => void;
 }) {
   return (
@@ -141,19 +137,6 @@ export function NodeDetailPanel({
         </div>
       )}
       <div className="px-4 py-3 flex flex-col gap-2">
-        {isPinned && onUnpin && (
-          <button
-            onClick={onUnpin}
-            className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
-            style={{
-              background: "rgba(249,115,22,0.1)",
-              color: "#f97316",
-              border: "1px solid rgba(249,115,22,0.2)",
-            }}
-          >
-            <span>📌</span> Unpin Path
-          </button>
-        )}
         <button
           onClick={() => onToggle(node.id, !node.selected)}
           className="w-full px-3 py-2 rounded-lg text-xs font-medium transition-colors"

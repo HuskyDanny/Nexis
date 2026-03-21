@@ -424,6 +424,10 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
         onNodeClick={handleNodeClick}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
+        onPaneClick={() => {
+          if (pinnedNodeId) unpinPath();
+          setSelectedNode(null);
+        }}
         onInit={(instance) => {
           rfInstance.current = instance;
         }}
@@ -442,8 +446,6 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
           node={selectedNode}
           onClose={() => setSelectedNode(null)}
           onToggle={handleToggle}
-          isPinned={pinnedNodeId === selectedNode.id}
-          onUnpin={pinnedNodeId ? unpinPath : undefined}
           onRegenerate={
             !selectedNode.selected
               ? () => {
