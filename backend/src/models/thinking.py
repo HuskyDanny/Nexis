@@ -49,6 +49,7 @@ class ThinkingSession(BaseModel):
     current_layer: int = 0
     version: int = 1
     error: str | None = None
+    layer_cache: dict[str, dict[str, dict]] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
