@@ -18,6 +18,11 @@ import { ThinkingView } from "./components/ThinkingView";
 
 const log = createLogger("app");
 
+function todayDate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 const DIR_COLOR: Record<string, string> = {
   bullish: "#22c55e",
   bearish: "#ef4444",
@@ -115,9 +120,10 @@ function App() {
   );
 
   useEffect(() => {
-    log.info("Loading pools for 2026-03-20");
+    const date = todayDate();
+    log.info("Loading live pools for", date);
     graphApi
-      .getPools("2026-03-20")
+      .getLivePools(date)
       .then((res) => {
         setNewsPool(res.data.news);
         setValuePool(res.data.value);
@@ -154,7 +160,7 @@ function App() {
     log.info("Starting thinking session with", selectedNews.size, "news");
     try {
       const newsIds = Array.from(selectedNews);
-      const res = await graphApi.startThinking("2026-03-20", "US", 3, newsIds);
+      const res = await graphApi.startThinking(todayDate(), "US", 3, newsIds);
       setThinkingSessionId(res.data.session_id);
       setPhase("thinking");
       log.info("Thinking session started:", res.data.session_id);
@@ -195,7 +201,7 @@ function App() {
         </h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-text-muted tracking-wide">
-            2026-03-20
+            {todayDate()}
           </span>
           <span
             className="text-xs px-2 py-0.5 rounded-full border"

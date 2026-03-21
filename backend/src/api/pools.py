@@ -56,8 +56,38 @@ async def get_live_pools(date: str, market: str = "US", topics: str = ""):
         )
         value = (mock or {}).get("items", [])
 
+    # Cache live data in MongoDB so thinking sessions can find it by date
+    if news or value:
+        collection = mongodb.get_collection("pools")
+        if news:
+            await collection.update_one(
+                {"type": "news", "date": date, "market": market},
+                {
+                    "$set": {
+                        "type": "news",
+                        "date": date,
+                        "market": market,
+                        "items": news,
+                    }
+                },
+                upsert=True,
+            )
+        if value:
+            await collection.update_one(
+                {"type": "value", "date": date, "market": market},
+                {
+                    "$set": {
+                        "type": "value",
+                        "date": date,
+                        "market": market,
+                        "items": value,
+                    }
+                },
+                upsert=True,
+            )
+
     log.info(
-        "GET /pools/live/%s — %d news, %d values (topics=%s)",
+        "GET /pools/live/%s — %d news, %d values (topics=%s, cached)",
         date,
         len(news),
         len(value),

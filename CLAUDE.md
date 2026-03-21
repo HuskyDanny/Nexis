@@ -1,17 +1,28 @@
-# Financial Agent v2 — Frontend Worktree
+# Financial Agent v2 — Main Repo
 
 ## Worktree Topology
 
 | Role | Path | Branch |
 |------|------|--------|
-| Main | `~/Desktop/repos/projects/financial-agent-v2` | `main` |
+| **Main (you)** | `~/Desktop/repos/projects/financial-agent-v2` | `main` |
 | Backend | `~/Desktop/repos/projects/financial-agent-v2-backend-wt` | `wt/backend` |
-| **Frontend (you)** | `~/Desktop/repos/projects/financial-agent-v2-frontend-wt` | `wt/frontend` |
+| Frontend | `~/Desktop/repos/projects/financial-agent-v2-frontend-wt` | `wt/frontend` |
 
-**You are the frontend worktree.** Only modify files under `frontend/`.
+**You are the main repo.** This is the coordinator — all merges happen here.
+
+### Worktree Rules
+- Worktrees are **persistent** — don't delete them between tasks. To reset: `git reset --hard origin/main` inside the worktree.
+- Backend worktree touches only `backend/` files.
+- Frontend worktree touches only `frontend/` files.
+- Each worktree runs its own Claude Code session.
 
 ### Coordination
-- Check main: `git -C ../financial-agent-v2 log --oneline -5`
-- Check backend worktree: `git -C ../financial-agent-v2-backend-wt log --oneline -5`
-- Do NOT modify `backend/` files — that's the backend worktree's job.
-- If you need a new API contract or type, coordinate with main worktree first.
+- Check backend state: `git -C ../financial-agent-v2-backend-wt log --oneline -5`
+- Check frontend state: `git -C ../financial-agent-v2-frontend-wt log --oneline -5`
+- Read sibling worktree files to check compatibility or merge readiness.
+- Do NOT modify files in sibling worktrees — only read from them.
+
+### Merge Protocol
+- Merge one branch at a time with `--no-ff` — least-conflict branch first.
+- If both branches touch the same file: merge one first, rebase the other on main.
+- After merge: verify, then clean up the branch (but keep the worktree).

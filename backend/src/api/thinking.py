@@ -59,7 +59,7 @@ async def start_thinking(req: StartRequest):
         req.max_depth,
     )
 
-    # Load pools from MongoDB
+    # Load pools — try MongoDB first, fall back to live APIs
     pools_col = mongodb.get_collection("pools")
     news_pool = await pools_col.find_one(
         {"type": "news", "date": req.date, "market": req.market}, {"_id": 0}
@@ -70,6 +70,18 @@ async def start_thinking(req: StartRequest):
 
     news_items = (news_pool or {}).get("items", [])
     value_items = (value_pool or {}).get("items", [])
+
+    # If no cached data, fetch live
+    if not news_items or not value_items:
+        import asyncio
+        from src.services.data_sources import fetch_real_news, fetch_real_stocks
+
+        if not news_items:
+            log.info("No cached news for %s, fetching live", req.date)
+            news_items = await fetch_real_news(limit=10, topics="financial_markets")
+        if not value_items:
+            log.info("No cached values for %s, fetching live", req.date)
+            value_items = await asyncio.to_thread(fetch_real_stocks)
 
     # If specific news IDs selected, filter; otherwise use all
     if req.selected_news_ids:

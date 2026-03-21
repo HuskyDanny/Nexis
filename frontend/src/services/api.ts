@@ -37,6 +37,10 @@ export const graphApi = {
     api.get<Layer[]>(`/nodes/${nodeId}/layers`),
   getPools: (date: string, market: Market = "US") =>
     api.get<PoolsResponse>(`/pools/${date}`, { params: { market } }),
+  getLivePools: (date: string, market: Market = "US", topics: string = "") =>
+    api.get<PoolsResponse>(`/pools/live/${date}`, {
+      params: { market, topics },
+    }),
   startThinking: (
     date: string,
     market: Market = "US",
