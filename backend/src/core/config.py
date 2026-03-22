@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     perigon_api_key: str = ""
     session: SessionConfig = SessionConfig()
 
+    # Pool pipeline config
+    news_cron_interval_hours: int = 2
+    news_similarity_threshold: float = 0.75
+    news_lexical_weight: float = 0.4
+    news_base_half_life_hours: int = 24
+    news_stale_threshold: int = 30
+    news_max_age_days: int = 7
+    value_stale_threshold: int = 20
+
     model_config = {"env_file": [".env.base", ".env"], "env_file_encoding": "utf-8"}
 
 
