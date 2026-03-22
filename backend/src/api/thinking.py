@@ -144,30 +144,35 @@ async def get_session(session_id: str):
 
 @router.post("/{session_id}/step", response_model=StepResponse)
 async def think_step(session_id: str):
-    """Execute one layer of thinking."""
-    col = mongodb.get_collection("thinking_sessions")
-    session = await col.find_one({"id": session_id}, {"_id": 0})
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    """Execute one layer of thinking. Uses CAS to prevent concurrent steps."""
+    from pymongo import ReturnDocument
 
-    if session["status"] not in ("paused", "idle"):
+    col = mongodb.get_collection("thinking_sessions")
+
+    # CAS: atomically claim the session for thinking
+    session = await col.find_one_and_update(
+        {"id": session_id, "status": {"$in": ["paused", "idle"]}},
+        {"$set": {"status": "thinking"}, "$inc": {"version": 1}},
+        projection={"_id": 0},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not session:
+        existing = await col.find_one({"id": session_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Session not found")
         raise HTTPException(
-            status_code=409, detail=f"Cannot step: session is {session['status']}"
+            status_code=409,
+            detail=f"Cannot step: session is {existing['status']} (concurrent modification)",
         )
 
     current_layer = session["current_layer"]
     next_layer = current_layer + 1
 
     if next_layer > session["max_depth"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Max depth reached. Use /match to find opportunities.",
-        )
+        await col.update_one({"id": session_id}, {"$set": {"status": "paused"}})
+        raise HTTPException(status_code=400, detail="Max depth reached. Use /match.")
 
     log.info("Session %s: stepping to layer %d", session_id, next_layer)
-
-    # Set status to thinking
-    await col.update_one({"id": session_id}, {"$set": {"status": "thinking"}})
 
     try:
         # Get selected nodes from current layer as context
