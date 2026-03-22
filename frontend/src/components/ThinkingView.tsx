@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import type { ThinkingSession, ThinkingNode } from "../types/thinking";
 import {
   buildThinkingGraph,
+  nodeStyle,
   LAYER_COLORS,
 } from "../lib/thinking-graph-builder";
 import {
@@ -43,6 +44,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   const [selectedNode, setSelectedNode] = useState<ThinkingNode | null>(null);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+  const positionMap = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   const {
     pinnedNodeId,
@@ -52,14 +54,22 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     handleNodeMouseLeave,
   } = usePathHighlight({ session, setNodes, setEdges });
 
+  const savePositions = useCallback((rfNodes: RFNode[]) => {
+    for (const n of rfNodes) {
+      positionMap.current.set(n.id, { x: n.position.x, y: n.position.y });
+    }
+  }, []);
+
   // Load session
   const loadSession = useCallback(async () => {
     try {
       const res = await graphApi.getSession(sessionId);
       const s = res.data;
       setSession(s);
+      positionMap.current.clear();
 
       const { rfNodes, rfEdges } = buildThinkingGraph(s.nodes, s.edges);
+      savePositions(rfNodes);
       setNodes(rfNodes);
       setEdges(rfEdges);
 
@@ -77,7 +87,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     } catch (err) {
       log.error("Failed to load session:", err);
     }
-  }, [sessionId, setNodes, setEdges]);
+  }, [sessionId, setNodes, setEdges, savePositions]);
 
   useEffect(() => {
     loadSession();
@@ -92,6 +102,74 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     return () => clearInterval(interval);
   }, [session?.status, loadSession]);
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const res = await graphApi.getSession(sessionId);
+      const s = res.data;
+      setSession(s);
+      unpinPath();
+
+      const selectedMap = new Map(s.nodes.map((n) => [n.id, n]));
+      setNodes((prev) =>
+        prev.map((rfNode) => {
+          const tn = selectedMap.get(rfNode.id);
+          if (!tn) return rfNode;
+          return {
+            ...rfNode,
+            data: { ...rfNode.data, selected: tn.selected },
+            style: nodeStyle(tn.type, tn.selected, tn.layer),
+          };
+        }),
+      );
+      log.info("Session refreshed (style-only)");
+    } catch (err) {
+      log.error("Failed to refresh session:", err);
+    }
+  }, [sessionId, setNodes, unpinPath]);
+
+  const loadSessionIncremental = useCallback(async () => {
+    try {
+      const res = await graphApi.getSession(sessionId);
+      const s = res.data;
+      setSession(s);
+
+      const newNodes = s.nodes.filter((n) => !positionMap.current.has(n.id));
+
+      if (newNodes.length === 0) {
+        const selectedMap = new Map(s.nodes.map((n) => [n.id, n]));
+        setNodes((prev) =>
+          prev.map((rfNode) => {
+            const tn = selectedMap.get(rfNode.id);
+            if (!tn) return rfNode;
+            return {
+              ...rfNode,
+              data: { ...rfNode.data, selected: tn.selected },
+              style: nodeStyle(tn.type, tn.selected, tn.layer),
+            };
+          }),
+        );
+        return;
+      }
+
+      const { rfNodes, rfEdges } = buildThinkingGraph(
+        s.nodes,
+        s.edges,
+        positionMap.current,
+      );
+      savePositions(rfNodes);
+      setNodes(rfNodes);
+      setEdges(rfEdges);
+
+      setTimeout(
+        () => rfInstance.current?.fitView({ padding: 0.15, duration: 400 }),
+        200,
+      );
+      log.info("Session loaded incrementally:", newNodes.length, "new nodes");
+    } catch (err) {
+      log.error("Failed to load session incrementally:", err);
+    }
+  }, [sessionId, setNodes, setEdges, savePositions]);
+
   // Step to next layer
   const handleStep = useCallback(async () => {
     if (isThinking || !session) return;
@@ -99,12 +177,12 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     log.info("Stepping to layer", session.current_layer + 1);
     try {
       await graphApi.thinkStep(sessionId);
-      await loadSession();
+      await loadSessionIncremental();
     } catch (err) {
       log.error("Step failed:", err);
     }
     setIsThinking(false);
-  }, [sessionId, session, isThinking, loadSession]);
+  }, [sessionId, session, isThinking, loadSessionIncremental]);
 
   // Match against value pool
   const handleMatch = useCallback(async () => {
@@ -113,12 +191,12 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     log.info("Matching against value pool");
     try {
       await graphApi.matchValues(sessionId);
-      await loadSession();
+      await loadSessionIncremental();
     } catch (err) {
       log.error("Match failed:", err);
     }
     setIsThinking(false);
-  }, [sessionId, session, isThinking, loadSession]);
+  }, [sessionId, session, isThinking, loadSessionIncremental]);
 
   // Pane click: useCallback to avoid stale closure in React Flow
   const handlePaneClick = useCallback(() => {
@@ -175,13 +253,13 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     async (nodeId: string, selected: boolean) => {
       try {
         await graphApi.toggleNode(sessionId, nodeId, selected);
-        await loadSession();
+        await refreshSession();
         setSelectedNode(null);
       } catch (err) {
         log.error("Toggle failed:", err);
       }
     },
-    [sessionId, loadSession],
+    [sessionId, refreshSession],
   );
 
   const canStep =
