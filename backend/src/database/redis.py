@@ -1,49 +1,44 @@
-import redis.asyncio as redis
+import redis.asyncio as aioredis
 
 
 class RedisClient:
-    def __init__(self):
-        self.client: redis.Redis | None = None
+    def __init__(self) -> None:
+        self.client: aioredis.Redis | None = None
 
-    def _check(self):
+    def _connected(self) -> aioredis.Redis:
+        """Return client or raise if not connected. Narrows type for Pyright."""
         if self.client is None:
             raise RuntimeError("Redis not connected")
+        return self.client
 
-    async def connect(self, url: str):
-        self.client = redis.from_url(url, decode_responses=True)
+    async def connect(self, url: str) -> None:
+        self.client = aioredis.from_url(url, decode_responses=True)
         await self.client.ping()
 
-    async def close(self):
+    async def close(self) -> None:
         if self.client:
             await self.client.close()
 
     async def get(self, key: str) -> str | None:
-        self._check()
-        return await self.client.get(key)
+        return await self._connected().get(key)  # type: ignore[return-value]
 
-    async def set(self, key: str, value: str, ttl: int | None = None):
-        self._check()
-        await self.client.set(key, value, ex=ttl)
+    async def set(self, key: str, value: str, ttl: int | None = None) -> None:
+        await self._connected().set(key, value, ex=ttl)
 
     async def delete(self, *keys: str) -> int:
-        self._check()
-        return await self.client.delete(*keys)
+        return await self._connected().delete(*keys)
 
     async def hset(self, key: str, mapping: dict) -> int:
-        self._check()
-        return await self.client.hset(key, mapping=mapping)
+        return await self._connected().hset(key, mapping=mapping)  # type: ignore[return-value]
 
     async def hget(self, key: str, field: str) -> str | None:
-        self._check()
-        return await self.client.hget(key, field)
+        return await self._connected().hget(key, field)  # type: ignore[return-value]
 
     async def hgetall(self, key: str) -> dict:
-        self._check()
-        return await self.client.hgetall(key)
+        return await self._connected().hgetall(key)  # type: ignore[return-value]
 
     async def expire(self, key: str, seconds: int) -> bool:
-        self._check()
-        return await self.client.expire(key, seconds)
+        return await self._connected().expire(key, seconds)
 
 
 redis_client = RedisClient()
