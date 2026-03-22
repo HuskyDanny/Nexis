@@ -13,6 +13,7 @@ from uuid import uuid4
 from crewai import Agent, Crew, Task
 
 from src.agents.llm_config import get_main_llm, get_small_llm
+from src.agents.skills.base import load_skill, build_system_prompt
 
 log = logging.getLogger("fa2.agents")
 
@@ -108,16 +109,13 @@ def think_effects(
         return [], []
 
     try:
+        system_prompt = build_system_prompt()
         thinker = Agent(
             role="Financial Effects Analyst",
-            goal="Identify causal market effects from financial events",
-            backstory=(
-                "You are a macro-economic analyst who traces how financial events "
-                "cascade through sectors. You identify second and third-order effects "
-                "that most analysts miss. When relevant, you pull in related news "
-                "from the broader news pool to strengthen your analysis."
-            ),
+            goal="Identify causal market effects from financial events using your analytical skills",
+            backstory=system_prompt,
             llm=get_main_llm(),
+            tools=[load_skill],
             verbose=False,
         )
 
@@ -275,16 +273,13 @@ def match_opportunities(
         return [], []
 
     try:
+        system_prompt = build_system_prompt()
         matcher = Agent(
             role="Value Opportunity Matcher",
-            goal="Match market effects to undervalued stocks that benefit from them",
-            backstory=(
-                "You are a value investing specialist who identifies stocks that "
-                "will benefit from market effects before the broader market catches on. "
-                "You look for alignment between causal effects and a stock's sector, "
-                "business model, and competitive position."
-            ),
+            goal="Match market effects to undervalued stocks using your analytical skills",
+            backstory=system_prompt,
             llm=get_main_llm(),
+            tools=[load_skill],
             verbose=False,
         )
 
