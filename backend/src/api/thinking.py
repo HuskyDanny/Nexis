@@ -198,7 +198,7 @@ async def think_step(session_id: str):
         # Compute cache key from selected parents at current layer
         from src.services.cache import parent_set_hash
 
-        selected_parent_ids = sorted(n["id"] for n in current_layer_nodes)
+        selected_parent_ids = [n["id"] for n in current_layer_nodes]
         ps_hash = parent_set_hash(selected_parent_ids)
         cache_key = f"layer_cache.{next_layer}.{ps_hash}"
 

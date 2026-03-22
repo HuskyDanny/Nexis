@@ -10,7 +10,7 @@ export default defineConfig({
     port: 3000,
     host: true,
     proxy: {
-      "/api": `http://localhost:${apiPort}`,
+      "/api": `http://127.0.0.1:${apiPort}`,
     },
   },
 });
