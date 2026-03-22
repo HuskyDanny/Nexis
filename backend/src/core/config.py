@@ -1,4 +1,10 @@
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+
+
+class SessionConfig(BaseModel):
+    cache_ttl_seconds: int = 3600
+    key_prefix: str = "session"
 
 
 class Settings(BaseSettings):
@@ -10,6 +16,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     siliconflow_api_key: str = ""
     perigon_api_key: str = ""
+    session: SessionConfig = SessionConfig()
 
     model_config = {"env_file": [".env.base", ".env"], "env_file_encoding": "utf-8"}
 

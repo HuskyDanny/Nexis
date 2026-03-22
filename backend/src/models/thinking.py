@@ -47,6 +47,7 @@ class ThinkingSession(BaseModel):
     edges: list[ThinkingEdge] = Field(default_factory=list)
     status: SessionStatus = SessionStatus.IDLE
     current_layer: int = 0
+    version: int = 1
     error: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
