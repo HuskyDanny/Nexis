@@ -15,7 +15,7 @@ from crewai import Agent, Crew, Task
 from src.agents.llm_config import get_main_llm, get_small_llm
 from src.agents.skills.base import load_skill, build_system_prompt
 
-log = logging.getLogger("fa2.agents")
+log = logging.getLogger("nexis.agents")
 
 
 def convergence_score(sentiment: float, discount: float, agreement: float) -> float:

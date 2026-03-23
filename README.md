@@ -69,10 +69,10 @@ Open `http://localhost:3000` — select news or click **Run Auto**.
 |----------|--------|-------------|
 | `/api/thinking/auto` | POST | Full auto pipeline |
 | `/api/thinking` | POST | Start manual session |
-| `/api/thinking/:id/step` | POST | Think one layer |
-| `/api/thinking/:id/match` | POST | Match against value pool |
-| `/api/thinking/:id/node/:id` | PATCH | Toggle node selection |
-| `/api/pools/live/:date` | GET | Real-time news + stocks |
+| `/api/thinking/{session_id}/step` | POST | Think one layer |
+| `/api/thinking/{session_id}/match` | POST | Match against value pool |
+| `/api/thinking/{session_id}/node/{node_id}` | PATCH | Toggle node selection |
+| `/api/pools/live/{date}` | GET | Real-time news + stocks |
 | `/api/health` | GET | Health check |
 
 ## Tech Stack
