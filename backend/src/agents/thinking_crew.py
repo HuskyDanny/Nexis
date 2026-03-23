@@ -1,4 +1,4 @@
-"""CrewAI agent definitions for the Financial Agent v2 thinking pipeline.
+"""CrewAI agent definitions for the Nexis thinking pipeline.
 
 Three crew functions that correspond to pipeline stages:
 1. rank_and_select_news — rank news by market impact (small LLM)

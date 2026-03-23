@@ -1,4 +1,4 @@
-"""Structured logging for Financial Agent v2.
+"""Structured logging for Nexis.
 
 Two levels:
   - PRODUCTION (INFO): key steps, state transitions, request summaries
