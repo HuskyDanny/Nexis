@@ -1,51 +1,31 @@
-# Financial Agent v2 — Main Repo
+# Financial Agent v2 (Nexis)
 
-## Worktree Topology
+## Worktree Model
 
-| Role | Path | Branch |
-|------|------|--------|
-| **Main (you)** | `~/Desktop/repos/projects/financial-agent-v2` | `main` |
-| Backend | `~/Desktop/repos/projects/financial-agent-v2-backend-wt` | `wt/backend` |
-| Frontend | `~/Desktop/repos/projects/financial-agent-v2-frontend-wt` | `wt/frontend` |
+Feature worktrees are **ephemeral** — one per feature, destroyed after merge. See `~/.claude/CLAUDE.md` for the full workflow.
 
-**You are the main repo.** This is the coordinator — all merges happen here.
-
-### Worktree Rules
-- Worktrees are **persistent** — don't delete them between tasks. To reset: `git reset --hard origin/main` inside the worktree.
-- Backend worktree touches only `backend/` files.
-- Frontend worktree touches only `frontend/` files.
-- Each worktree runs its own Claude Code session.
-
-### Persistent Worktree
-This worktree is persistent — don't delete it between tasks. Reset with:
 ```bash
-git fetch origin main && git reset --hard origin/main && git clean -fd
+# Create
+bash ~/.claude/scripts/worktree-create.sh <feature> [frontend|backend]
+
+# Destroy (from main repo)
+bash ~/.claude/scripts/worktree-destroy.sh <feature>
 ```
 
-### Worktree Port Convention
+### Port Convention
 
-Each worktree uses a dedicated port pair to avoid conflicts during parallel development:
+Each worktree uses `VITE_API_PORT` to avoid port conflicts:
 
-| Worktree | Backend Port | Frontend Port | Vite Proxy Target |
-|----------|-------------|---------------|-------------------|
-| Main     | 8000        | 3000          | `:8000`           |
-| Frontend | 8001        | 3001          | `:8001`           |
-| Backend  | 8002        | —             | —                 |
+| Context | Backend Port | Frontend Port | Start Command |
+|---------|-------------|---------------|---------------|
+| Main / Docker | 8000 | 3000 | `docker compose up` |
+| Feature worktree | 8001+ | 3000 | `VITE_API_PORT=8001 npm run dev` |
 
-**Backend start:** `MONGODB_URL="mongodb://localhost:27017/financial_agent_v2" uvicorn src.main:app --port <port>`
+**Backend:** `MONGODB_URL="mongodb://localhost:27017/financial_agent_v2" uvicorn src.main:app --port <port>`
 
-**Frontend start:** Vite reads `VITE_API_PORT` env var (defaults to `8000`). Override per-worktree:
-```bash
-VITE_API_PORT=8001 npm run dev
-```
+**Frontend:** `VITE_API_PORT=<backend-port> npm run dev`
 
 ### Coordination
-- Check backend state: `git -C ../financial-agent-v2-backend-wt log --oneline -5`
-- Check frontend state: `git -C ../financial-agent-v2-frontend-wt log --oneline -5`
-- Read sibling worktree files to check compatibility or merge readiness.
-- Do NOT modify files in sibling worktrees — only read from them.
-
-### Merge Protocol
-- Merge one branch at a time with `--no-ff` — least-conflict branch first.
-- If both branches touch the same file: merge one first, rebase the other on main.
-- After merge: verify, then clean up the branch (but keep the worktree).
+- Check main: `git -C ../financial-agent-v2 log --oneline -5`
+- Do NOT modify files outside your worktree's scope (frontend vs backend)
+- If you need a new API contract or type, coordinate with main worktree first
