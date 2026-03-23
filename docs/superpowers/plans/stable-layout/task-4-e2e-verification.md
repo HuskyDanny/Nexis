@@ -7,7 +7,7 @@ cd backend && MONGODB_URL="mongodb://localhost:27017/financial_agent_v2" python 
 cd frontend && npm run dev &
 ```
 
-Note: `frontend/vite.config.ts` proxy must point to `http://localhost:8001`.
+Note: Run the frontend with `VITE_API_PORT=8001 npm run dev` to proxy to the test backend.
 
 - [ ] **Step 2: Test toggle stability**
 
@@ -32,12 +32,8 @@ Note: `frontend/vite.config.ts` proxy must point to `http://localhost:8001`.
 1. Click "Find Opportunities"
 2. **Verify:** All existing nodes stay put. New opportunity nodes appear at the outermost ring.
 
-- [ ] **Step 5: Revert vite proxy if needed**
+- [ ] **Step 5: Reset API proxy configuration if needed**
 
-If `vite.config.ts` proxy was changed to `:8001`, revert to `:8000`:
-
-```typescript
-"/api": "http://localhost:8000",
-```
+If you overrode the API port for testing (for example by setting `VITE_API_PORT=8001`), unset it or set it back to `8000` so the frontend talks to the default backend port. No changes to `vite.config.ts` are required.
 
 - [ ] **Step 6: Commit any final adjustments**

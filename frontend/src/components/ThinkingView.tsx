@@ -60,6 +60,16 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     }
   }, []);
 
+  const handleNodeDragStop = useCallback(
+    (_event: React.MouseEvent, node: RFNode) => {
+      positionMap.current.set(node.id, {
+        x: node.position.x,
+        y: node.position.y,
+      });
+    },
+    [],
+  );
+
   // Load session
   const loadSession = useCallback(async () => {
     try {
@@ -389,6 +399,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
         onNodeClick={handleNodeClick}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
+        onNodeDragStop={handleNodeDragStop}
         paneClickDistance={5}
         onPaneClick={handlePaneClick}
         onInit={(instance) => {
