@@ -292,7 +292,7 @@ def scan_matches(
     for node in opportunity_nodes:
         meta = node.get("metadata", {})
         ticker = meta.get("ticker")
-        node_layer = meta.get("layer")
+        node_layer = node.get("layer") or meta.get("layer")
         if ticker and node_layer is not None:
             opp_index[(ticker, node_layer)] = node
 
