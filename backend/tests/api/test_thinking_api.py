@@ -263,23 +263,24 @@ async def test_auto_think_timeout_sets_status():
         await asyncio.sleep(999)
 
     with (
-        patch("src.api.thinking.mongodb") as mock_db,
-        patch("src.api.thinking.run_pipeline", side_effect=slow_pipeline),
+        patch("src.api.thinking_auto.mongodb") as mock_db,
+        patch("src.api.thinking_auto.run_pipeline", side_effect=slow_pipeline),
         patch(
-            "src.api.thinking.fetch_real_news",
+            "src.api.thinking_auto.fetch_real_news",
             new_callable=AsyncMock,
             return_value=[{"id": "n1", "title": "Test news", "confidence": 90}],
         ),
         patch(
-            "src.api.thinking.fetch_real_stocks",
+            "src.api.thinking_auto.fetch_real_stocks",
             return_value=[{"ticker": "AAPL", "name": "Apple"}],
         ),
         patch(
-            "src.api.thinking.PIPELINE_TIMEOUT_S", 0.1
+            "src.api.thinking_auto.PIPELINE_TIMEOUT_S", 0.1
         ),  # Very short timeout for test
     ):
         mock_db.get_collection.side_effect = get_collection
-        from src.api.thinking import auto_think, StartRequest
+        from src.api.thinking_auto import auto_think
+        from src.api.thinking import StartRequest
 
         req = StartRequest(date="2026-03-23", market="US", max_depth=3)
         resp = await auto_think(req)
@@ -314,20 +315,21 @@ async def test_auto_think_session_includes_new_fields():
         pass
 
     with (
-        patch("src.api.thinking.mongodb") as mock_db,
-        patch("src.api.thinking.run_pipeline", side_effect=fast_pipeline),
+        patch("src.api.thinking_auto.mongodb") as mock_db,
+        patch("src.api.thinking_auto.run_pipeline", side_effect=fast_pipeline),
         patch(
-            "src.api.thinking.fetch_real_news",
+            "src.api.thinking_auto.fetch_real_news",
             new_callable=AsyncMock,
             return_value=[{"id": "n1", "title": "Test news", "confidence": 90}],
         ),
         patch(
-            "src.api.thinking.fetch_real_stocks",
+            "src.api.thinking_auto.fetch_real_stocks",
             return_value=[{"ticker": "AAPL", "name": "Apple"}],
         ),
     ):
         mock_db.get_collection.side_effect = get_collection
-        from src.api.thinking import auto_think, StartRequest
+        from src.api.thinking_auto import auto_think
+        from src.api.thinking import StartRequest
 
         req = StartRequest(date="2026-03-23", market="US", max_depth=3)
         await auto_think(req)
