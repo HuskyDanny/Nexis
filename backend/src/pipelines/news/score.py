@@ -11,9 +11,10 @@ class NewsDecayScore:
         freshness = self._freshness(entity)
         source_count = self._source_factor(entity)
         ticker_relevance = self._ticker_factor(entity)
-        score = 0.5 * freshness + 0.3 * source_count + 0.2 * ticker_relevance
+        raw = 0.5 * freshness + 0.3 * source_count + 0.2 * ticker_relevance
+        score = round(raw * 100, 1)  # Normalize to 0–100 scale
         return ScoreResult(
-            score=round(score, 4),
+            score=score,
             factors={
                 "freshness": round(freshness, 4),
                 "source_count": round(source_count, 4),

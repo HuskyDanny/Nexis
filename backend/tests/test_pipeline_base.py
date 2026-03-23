@@ -168,3 +168,10 @@ def test_no_max_age_keeps_old():
     r = ThresholdRetain(min_score=0.1)
     old = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
     assert r.should_retain({"score": 0.5, "last_seen_at": old})
+
+
+def test_missing_last_seen_not_retainable():
+    r = ThresholdRetain(min_score=0.1, max_age_days=7)
+    assert not r.should_retain({"score": 0.5})
+    assert not r.should_retain({"score": 0.5, "last_seen_at": ""})
+    assert not r.should_retain({"score": 0.5, "last_seen_at": None})

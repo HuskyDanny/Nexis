@@ -13,11 +13,16 @@ class RedisClient:
 
     async def connect(self, url: str) -> None:
         self.client = aioredis.from_url(url, decode_responses=True)
-        await self.client.ping()
+        try:
+            await self.client.ping()
+        except Exception:
+            self.client = None
+            raise
 
     async def close(self) -> None:
         if self.client:
             await self.client.close()
+            self.client = None
 
     async def get(self, key: str) -> str | None:
         return await self._connected().get(key)  # type: ignore[return-value]

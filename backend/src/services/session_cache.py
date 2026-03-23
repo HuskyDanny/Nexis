@@ -24,7 +24,10 @@ class SessionCache:
 
     async def write(self, session: dict) -> None:
         sid = session["id"]
-        meta = {f: str(session.get(f, "")) for f in self.META_FIELDS}
+        meta = {
+            f: str(v) if (v := session.get(f)) is not None else ""
+            for f in self.META_FIELDS
+        }
         await self.redis.hset(self._key(sid, "meta"), mapping=meta)
         await self.redis.set(
             self._key(sid, "nodes"), json.dumps(session.get("nodes", []))
@@ -40,8 +43,11 @@ class SessionCache:
         if not data:
             return None
         for f in self.INT_FIELDS:
-            if f in data:
-                data[f] = int(data[f])
+            if f in data and data[f]:
+                try:
+                    data[f] = int(data[f])
+                except (ValueError, TypeError):
+                    data[f] = 0
         return data
 
     async def read_nodes(self, sid: str) -> list[dict]:

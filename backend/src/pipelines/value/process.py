@@ -6,8 +6,8 @@ from src.models.pool_common import ProcessResult
 class TickerUpsertProcess:
     """Upsert by ticker:market composite key.
 
-    Merge: raw fields overwrite existing; unset fields are preserved.
-    Insert: creates a new entity with id = ticker:market.
+    Returns merge/insert decision — actual field merging is handled by
+    PoolPipeline (existing fields preserved, raw overlaid on top).
     """
 
     async def process(self, raw: dict, existing: list[dict]) -> ProcessResult:

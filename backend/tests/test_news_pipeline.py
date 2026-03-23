@@ -17,14 +17,14 @@ def _entity(age_days=0, sources=1, tickers=1):
 
 
 def test_fresh_news_high_score():
-    # With sources=1, tickers=1: score = 0.5*1.0 + 0.3*0.4 + 0.2*0.3 = 0.68
+    # With sources=1, tickers=1: raw = 0.5*1.0 + 0.3*0.4 + 0.2*0.3 = 0.68 → score=68.0
     r = NewsDecayScore(half_life_days=3.0).score(_entity(age_days=0))
-    assert r.score >= 0.6 and r.factors["freshness"] >= 0.9
+    assert r.score >= 60 and r.factors["freshness"] >= 0.9
 
 
 def test_old_news_low_score():
     r = NewsDecayScore(half_life_days=3.0).score(_entity(age_days=10))
-    assert r.score < 0.3 and r.factors["freshness"] < 0.15
+    assert r.score < 30 and r.factors["freshness"] < 0.15
 
 
 def test_half_life_freshness():
@@ -45,7 +45,7 @@ def test_no_tickers():
 # --- HybridSimilarityProcess ---
 @pytest.mark.asyncio
 async def test_insert_no_existing():
-    p = HybridSimilarityProcess(title_threshold=0.6, entity_threshold=0.5)
+    p = HybridSimilarityProcess(similarity_threshold=0.6)
     r = await p.process(
         {"title": "Fed holds rates", "tickers": ["SPY"], "named_entities": ["Fed"]},
         existing=[],
@@ -55,7 +55,7 @@ async def test_insert_no_existing():
 
 @pytest.mark.asyncio
 async def test_insert_no_similar():
-    p = HybridSimilarityProcess(title_threshold=0.6, entity_threshold=0.5)
+    p = HybridSimilarityProcess(similarity_threshold=0.6)
     r = await p.process(
         {
             "title": "Oil surge OPEC cuts",
@@ -76,7 +76,7 @@ async def test_insert_no_similar():
 
 @pytest.mark.asyncio
 async def test_merge_similar_title():
-    p = HybridSimilarityProcess(title_threshold=0.5, entity_threshold=0.5)
+    p = HybridSimilarityProcess(similarity_threshold=0.5)
     r = await p.process(
         {
             "title": "Federal Reserve holds interest rates steady",
@@ -97,7 +97,7 @@ async def test_merge_similar_title():
 
 @pytest.mark.asyncio
 async def test_merge_shared_entities():
-    p = HybridSimilarityProcess(title_threshold=0.8, entity_threshold=0.4)
+    p = HybridSimilarityProcess(similarity_threshold=0.4)
     r = await p.process(
         {
             "title": "Completely different headline about rates",

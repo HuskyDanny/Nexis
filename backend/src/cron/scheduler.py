@@ -25,8 +25,7 @@ def build_news_pipeline(market: str, repo: NewsEntityRepo) -> PoolPipeline:
     return PoolPipeline(
         fetch=AlphaVantageNewsFetch(),
         process=HybridSimilarityProcess(
-            title_threshold=settings.news_similarity_threshold,
-            entity_threshold=settings.news_similarity_threshold,
+            similarity_threshold=settings.news_similarity_threshold,
         ),
         score=NewsDecayScore(half_life_days=settings.news_base_half_life_hours / 24.0),
         retain=ThresholdRetain(

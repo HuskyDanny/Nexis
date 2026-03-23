@@ -4,9 +4,8 @@ from src.models.pool_common import ProcessResult
 
 
 class HybridSimilarityProcess:
-    def __init__(self, title_threshold: float = 0.6, entity_threshold: float = 0.5):
-        self.title_threshold = title_threshold
-        self.entity_threshold = entity_threshold
+    def __init__(self, similarity_threshold: float = 0.6, **_kwargs):
+        self.similarity_threshold = similarity_threshold
 
     async def process(self, raw: dict, existing: list[dict]) -> ProcessResult:
         raw_tokens = self._tokenize(raw.get("title", ""))
@@ -24,9 +23,7 @@ class HybridSimilarityProcess:
             if combined > best_score:
                 best_score, best_id = combined, e.get("id")
 
-        if best_id and (
-            best_score >= self.title_threshold or best_score >= self.entity_threshold
-        ):
+        if best_id and best_score >= self.similarity_threshold:
             return ProcessResult(
                 action="merge", entity_id=best_id, merged_from=self._gen_id(raw)
             )
