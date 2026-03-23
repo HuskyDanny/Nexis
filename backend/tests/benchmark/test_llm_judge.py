@@ -211,8 +211,8 @@ class TestDimensionMetrics:
         }
         assert set(captured_names) == expected
 
-    def test_all_metrics_include_reason(self):
-        """All metrics must be created with include_reason=True."""
+    def test_all_metrics_have_criteria(self):
+        """All metrics must have non-empty criteria strings."""
         mock_model = MagicMock()
         captured_kwargs = []
 
@@ -226,9 +226,7 @@ class TestDimensionMetrics:
             create_dimension_metrics(mock_model)
 
         for kw in captured_kwargs:
-            assert (
-                kw.get("include_reason") is True
-            ), f"Metric '{kw.get('name')}' missing include_reason=True"
+            assert kw.get("criteria"), f"Metric '{kw.get('name')}' missing criteria"
 
 
 # ---------------------------------------------------------------------------
