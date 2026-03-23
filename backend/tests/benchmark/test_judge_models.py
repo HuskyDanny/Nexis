@@ -63,12 +63,12 @@ class TestSiliconFlowModel:
         model = SiliconFlowModel(model_name="Qwen/Qwen3-8B")
         assert model.load_model() is model
 
-    def test_a_generate_delegates_to_generate(self):
+    async def test_a_generate_delegates_to_generate(self):
         from tests.benchmark.scoring.judge_models import SiliconFlowModel
 
         model = SiliconFlowModel(model_name="Qwen/Qwen3-8B")
         with patch.object(model, "generate", return_value="result") as mock_gen:
-            result = model.a_generate("hello")
+            result = await model.a_generate("hello")
 
         mock_gen.assert_called_once_with("hello", schema=None)
         assert result == "result"
@@ -90,6 +90,7 @@ class TestSiliconFlowModel:
             model="openai/Qwen/Qwen3-8B",
             messages=[{"role": "user", "content": "test prompt"}],
             api_base="https://api.siliconflow.cn/v1",
+            api_key=mock_completion.call_args.kwargs.get("api_key", ""),
         )
         assert result == "answer text"
 

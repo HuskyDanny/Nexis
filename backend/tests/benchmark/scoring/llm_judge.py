@@ -146,7 +146,7 @@ def create_dimension_metrics(judge_model: Any) -> list[GEval]:
             ],
             model=judge_model,
             threshold=dim["threshold"],
-            include_reason=True,
+            # GEval always populates .reason after measure()
         )
         metrics.append(metric)
 
@@ -274,7 +274,6 @@ def _score_bonus_insights(trace: BenchmarkTrace, judge_model: Any) -> list[str]:
             LLMTestCaseParams.ACTUAL_OUTPUT,
         ],
         model=judge_model,
-        include_reason=True,
     )
 
     test_case = LLMTestCase(input=full_input, actual_output=full_output)

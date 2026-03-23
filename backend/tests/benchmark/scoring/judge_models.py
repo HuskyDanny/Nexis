@@ -22,17 +22,20 @@ class SiliconFlowModel(DeepEvalBaseLLM):
         return self
 
     def generate(self, prompt: str, schema=None) -> str | object:
+        import os
+
         response = litellm.completion(
             model=f"openai/{self._model_name}",
             messages=[{"role": "user", "content": prompt}],
             api_base="https://api.siliconflow.cn/v1",
+            api_key=os.environ.get("SILICONFLOW_API_KEY", ""),
         )
         content: str = response.choices[0].message.content
         if schema is not None:
             return schema.model_validate(json.loads(content))
         return content
 
-    def a_generate(self, prompt: str, schema=None) -> str | object:
+    async def a_generate(self, prompt: str, schema=None) -> str | object:
         return self.generate(prompt, schema=schema)
 
     def get_model_name(self) -> str:

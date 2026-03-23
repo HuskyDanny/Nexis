@@ -114,9 +114,9 @@ class Pass1Report(BaseModel):
 class Pass2Scores(BaseModel):
     """LLM-judge pass 2 qualitative evaluation scores."""
 
-    dimensions: list[DimensionScore]
-    bonus_insights: list[str]
-    bonus_score: float
+    dimensions: list[DimensionScore] = Field(default_factory=list)
+    bonus_insights: list[str] = Field(default_factory=list)
+    bonus_score: float = 0.0
 
 
 class BenchmarkReport(BaseModel):
