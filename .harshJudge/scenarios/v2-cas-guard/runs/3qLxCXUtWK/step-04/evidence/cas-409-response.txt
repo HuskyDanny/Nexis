@@ -1,0 +1,1 @@
+HTTP 409\n{"detail": "Cannot step: session is thinking (concurrent modification)"}

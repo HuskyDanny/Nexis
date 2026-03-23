@@ -1,0 +1,52 @@
+{
+  "runId": "3qLxCXUtWK",
+  "scenarioSlug": "v2-cas-guard",
+  "status": "pass",
+  "startedAt": "2026-03-23T01:31:25.437Z",
+  "completedAt": "2026-03-23T01:33:31.024Z",
+  "duration": 1400,
+  "steps": [
+    {
+      "id": "01",
+      "status": "pass",
+      "duration": 500,
+      "error": null,
+      "evidenceFiles": [
+        "start-session-response.txt"
+      ],
+      "summary": "POST /api/thinking returned 200 with session_id=bd7beb3c3a64, status=paused"
+    },
+    {
+      "id": "02",
+      "status": "pass",
+      "duration": 300,
+      "error": null,
+      "evidenceFiles": [
+        "step-response.txt"
+      ],
+      "summary": "POST /step returned 200 with status=paused, current_layer=1. Session advanced to layer 1."
+    },
+    {
+      "id": "03",
+      "status": "pass",
+      "duration": 400,
+      "error": null,
+      "evidenceFiles": [
+        "mongo-status-update.json"
+      ],
+      "summary": "MongoDB updated session status to 'thinking' to simulate a concurrent step in progress."
+    },
+    {
+      "id": "04",
+      "status": "pass",
+      "duration": 200,
+      "error": null,
+      "evidenceFiles": [
+        "cas-409-response.txt"
+      ],
+      "summary": "CAS guard working: POST /step returned 409 with 'Cannot step: session is thinking (concurrent modification)'. Concurrent modification correctly blocked."
+    }
+  ],
+  "failedStep": null,
+  "errorMessage": null
+}

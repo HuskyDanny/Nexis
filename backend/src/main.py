@@ -5,19 +5,26 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.config import settings
 from src.core.logger import get_logger
+from src.database.mongodb import mongodb
+from src.database.redis import redis_client
 
 log = get_logger("app")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):  # noqa: ARG001
-    from src.database.mongodb import mongodb
-
     log.info("Starting up — connecting to MongoDB")
     await mongodb.connect(settings.mongodb_url)
     log.info("MongoDB connected")
+    log.info("Connecting to Redis")
+    try:
+        await redis_client.connect(settings.redis_url)
+        log.info("Redis connected")
+    except Exception as e:
+        log.warning("Redis connection failed (non-fatal): %s", e)
     yield
     log.info("Shutting down")
+    await redis_client.close()
     await mongodb.close()
 
 

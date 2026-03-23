@@ -1,0 +1,9 @@
+{
+  "runId": "9UElgdQ16o",
+  "stepId": "01",
+  "type": "db_snapshot",
+  "name": "seed-entities",
+  "capturedAt": "2026-03-23T01:34:08.946Z",
+  "fileSize": 98,
+  "metadata": {}
+}

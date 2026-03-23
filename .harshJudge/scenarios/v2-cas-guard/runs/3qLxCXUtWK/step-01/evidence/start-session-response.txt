@@ -1,0 +1,1 @@
+HTTP 200\n{"session_id": "bd7beb3c3a64", "status": "paused"}
