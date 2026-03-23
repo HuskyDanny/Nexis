@@ -1,0 +1,24 @@
+title: 'V6: Stale Entity Filtering on Pools Endpoint'
+slug: v6-stale-filtering
+starred: false
+tags:
+  - api
+  - pools
+  - filtering
+estimatedDuration: 15
+steps:
+  - id: '01'
+    title: Seed test entities in MongoDB
+    file: 01-seed-test-entities-in-mongodb.md
+  - id: '02'
+    title: GET pools without stale (default)
+    file: 02-get-pools-without-stale-default.md
+  - id: '03'
+    title: GET pools with include_stale=true
+    file: 03-get-pools-with-include-staletrue.md
+totalRuns: 1
+passCount: 1
+failCount: 0
+lastRun: '2026-03-23T01:36:09.643Z'
+lastResult: pass
+avgDuration: 900

@@ -1,0 +1,1 @@
+news_entities count: 1\n  id=entity-active-fed status=active score=80\nStale found: False\nPASS

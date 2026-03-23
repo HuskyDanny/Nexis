@@ -1,0 +1,42 @@
+{
+  "runId": "9UElgdQ16o",
+  "scenarioSlug": "v6-stale-filtering",
+  "status": "pass",
+  "startedAt": "2026-03-23T01:34:10.905Z",
+  "completedAt": "2026-03-23T01:36:09.642Z",
+  "duration": 900,
+  "steps": [
+    {
+      "id": "01",
+      "status": "pass",
+      "duration": 500,
+      "error": null,
+      "evidenceFiles": [
+        "seed-entities.json"
+      ],
+      "summary": "Seeded 2 news entities: 1 active (score=80), 1 stale (score=5)"
+    },
+    {
+      "id": "02",
+      "status": "pass",
+      "duration": 200,
+      "error": null,
+      "evidenceFiles": [
+        "default-pools-response.txt"
+      ],
+      "summary": "Default GET /pools returns only 1 active entity. Stale entity correctly excluded."
+    },
+    {
+      "id": "03",
+      "status": "pass",
+      "duration": 200,
+      "error": null,
+      "evidenceFiles": [
+        "include-stale-response.txt"
+      ],
+      "summary": "GET /pools with include_stale=true returns both entities (active + stale). Filtering override works correctly."
+    }
+  ],
+  "failedStep": null,
+  "errorMessage": null
+}

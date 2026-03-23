@@ -1,0 +1,9 @@
+{
+  "runId": "3qLxCXUtWK",
+  "stepId": "03",
+  "type": "db_snapshot",
+  "name": "mongo-status-update",
+  "capturedAt": "2026-03-23T01:32:58.212Z",
+  "fileSize": 37,
+  "metadata": {}
+}

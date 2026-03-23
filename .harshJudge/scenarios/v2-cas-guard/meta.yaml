@@ -1,0 +1,27 @@
+title: 'V2: CAS Guard Prevents Concurrent Step'
+slug: v2-cas-guard
+starred: false
+tags:
+  - api
+  - concurrency
+  - session
+estimatedDuration: 15
+steps:
+  - id: '01'
+    title: Start a thinking session
+    file: 01-start-a-thinking-session.md
+  - id: '02'
+    title: Step once to advance session
+    file: 02-step-once-to-advance-session.md
+  - id: '03'
+    title: Set session status to thinking (simulate concurrent)
+    file: 03-set-session-status-to-thinking-simulate-concurrent.md
+  - id: '04'
+    title: Attempt step on busy session
+    file: 04-attempt-step-on-busy-session.md
+totalRuns: 1
+passCount: 1
+failCount: 0
+lastRun: '2026-03-23T01:33:31.026Z'
+lastResult: pass
+avgDuration: 1400
