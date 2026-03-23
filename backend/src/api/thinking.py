@@ -1,83 +1,21 @@
-"""Thinking DAG API — start sessions, step through layers, toggle nodes, match values."""
+"""Thinking DAG API — start sessions, step through layers, toggle nodes, match values.
+
+Auto-pipeline and SSE endpoints live in thinking_auto.py.
+"""
 
 import asyncio
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
-from src.services.thinking_service import run_layer, run_pipeline
+from src.services.thinking_service import run_layer
 from src.services.data_sources import fetch_real_news, fetch_real_stocks
+
+# Auto-pipeline and SSE endpoints are in thinking_auto.py
 
 log = get_logger("api.thinking")
 router = APIRouter(prefix="/api/thinking", tags=["thinking"])
-
-PIPELINE_TIMEOUT_S = 300
-
-
-# --- Helpers ---
-
-
-async def _load_pools(date: str, market: str) -> tuple[list[dict], list[dict]]:
-    """Load news/value pools from DB, falling back to live APIs."""
-    pools_col = mongodb.get_collection("pools")
-    news_pool = await pools_col.find_one(
-        {"type": "news", "date": date, "market": market}, {"_id": 0}
-    )
-    value_pool = await pools_col.find_one(
-        {"type": "value", "date": date, "market": market}, {"_id": 0}
-    )
-    news_items = (news_pool or {}).get("items", [])
-    value_items = (value_pool or {}).get("items", [])
-    if not news_items:
-        news_items = await fetch_real_news(limit=10, topics="financial_markets")
-    if not value_items:
-        value_items = await asyncio.to_thread(fetch_real_stocks)
-    return news_items, value_items
-
-
-def _make_seed_nodes(news_list: list[dict]) -> list[dict]:
-    """Create layer-0 seed nodes from news items."""
-    return [
-        {
-            "id": n["id"],
-            "layer": 0,
-            "type": "news",
-            "content": n.get("title", n.get("summary", "")),
-            "reasoning": "",
-            "sources": [n.get("url", "")],
-            "parents": [],
-            "selected": True,
-            "metadata": {
-                k: v for k, v in n.items() if k not in ("id", "title", "summary", "url")
-            },
-        }
-        for n in news_list
-    ]
-
-
-def _make_session_doc(session_id, req, nodes, news_items, value_items, status="paused"):
-    """Build a session document with all required fields."""
-    from datetime import datetime, timezone
-
-    return {
-        "id": session_id,
-        "date": req.date,
-        "market": req.market,
-        "max_depth": req.max_depth,
-        "nodes": nodes,
-        "edges": [],
-        "status": status,
-        "current_layer": 0,
-        "error": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "news_pool": news_items,
-        "value_pool": value_items,
-        "layer_cache": {},
-        "chain_summaries": {},
-        "confidence_threshold": 35,
-    }
 
 
 # --- Request/Response schemas ---
@@ -265,6 +203,18 @@ async def think_step(session_id: str):
         new_edges = result.all_edges
         ctrl_summary = result.controller_decision.get("summary", "")
 
+        # Compute cache key for this layer's parent set
+        from src.services.cache import parent_set_hash
+
+        ps_hash = parent_set_hash(sorted(n["id"] for n in parent_nodes))
+
+        # Write layer_cache in nested dict format: {"layer_cache.<layer>": {ps_hash: {nodes, edges}}}
+        # MongoDB dot-notation sets layer_cache[str(next_layer)] = {ps_hash: data} in the document.
+        # The read path in toggle_node does: layer_cache.get(str(layer), {}).get(ps_hash)
+        # which matches this nested structure.
+        cache_set_key = f"layer_cache.{next_layer}"
+        cache_value = {ps_hash: {"nodes": new_nodes, "edges": new_edges}}
+
         if new_nodes:
             await col.update_one(
                 {"id": session_id},
@@ -277,6 +227,7 @@ async def think_step(session_id: str):
                         "current_layer": next_layer,
                         "status": "paused",
                         f"chain_summaries.{next_layer}": ctrl_summary,
+                        cache_set_key: cache_value,
                     },
                 },
             )
@@ -288,6 +239,7 @@ async def think_step(session_id: str):
                         "current_layer": next_layer,
                         "status": "paused",
                         f"chain_summaries.{next_layer}": ctrl_summary,
+                        cache_set_key: cache_value,
                     },
                 },
             )
@@ -442,162 +394,3 @@ async def match_values(session_id: str):
 
     log.info("Session %s: found %d opportunities", session_id, len(opportunities))
     return {"opportunities": opportunities}
-
-
-@router.post("/auto", response_model=StartResponse)
-async def auto_think(req: StartRequest):
-    """Full auto pipeline: create session -> think all layers -> match.
-    Returns session_id. Poll GET /thinking/:id to watch progress."""
-    from uuid import uuid4
-    from datetime import datetime, timezone
-
-    session_id = uuid4().hex[:12]
-    log.info(
-        "AUTO session %s for %s/%s max_depth=%d",
-        session_id,
-        req.date,
-        req.market,
-        req.max_depth,
-    )
-
-    # Load pools
-    pools_col = mongodb.get_collection("pools")
-    news_pool = await pools_col.find_one(
-        {"type": "news", "date": req.date, "market": req.market}, {"_id": 0}
-    )
-    value_pool = await pools_col.find_one(
-        {"type": "value", "date": req.date, "market": req.market}, {"_id": 0}
-    )
-
-    news_items = (news_pool or {}).get("items", [])
-    value_items = (value_pool or {}).get("items", [])
-
-    if not news_items or not value_items:
-        if not news_items:
-            news_items = await fetch_real_news(limit=10, topics="financial_markets")
-        if not value_items:
-            value_items = await asyncio.to_thread(fetch_real_stocks)
-
-    sorted_news = sorted(news_items, key=lambda n: n.get("confidence", 0), reverse=True)
-    selected = sorted_news[:5]
-    log.info("Auto-selected %d/%d news by impact", len(selected), len(news_items))
-
-    nodes = []
-    for news in selected:
-        nodes.append(
-            {
-                "id": news["id"],
-                "layer": 0,
-                "type": "news",
-                "content": news.get("title", news.get("summary", "")),
-                "reasoning": "",
-                "sources": [news.get("url", "")],
-                "parents": [],
-                "selected": True,
-                "metadata": {
-                    k: v
-                    for k, v in news.items()
-                    if k not in ("id", "title", "summary", "url")
-                },
-            }
-        )
-
-    session = {
-        "id": session_id,
-        "date": req.date,
-        "market": req.market,
-        "max_depth": req.max_depth,
-        "nodes": nodes,
-        "edges": [],
-        "status": "thinking",
-        "current_layer": 0,
-        "error": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "news_pool": news_items,
-        "value_pool": value_items,
-        "chain_summaries": {},
-        "confidence_threshold": 35,
-    }
-
-    col = mongodb.get_collection("thinking_sessions")
-    await col.insert_one(session)
-
-    async def _run_with_timeout():
-        async def _on_layer_complete(layer: int, result) -> None:
-            new_nodes = (
-                result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
-            )
-            update: dict = {
-                "$set": {"current_layer": layer, "status": "thinking"},
-            }
-            if new_nodes:
-                update["$push"] = {
-                    "nodes": {"$each": new_nodes},
-                    "edges": {"$each": result.all_edges},
-                }
-            await col.update_one({"id": session_id}, update)
-            log.info("AUTO %s: layer %d — %d nodes", session_id, layer, len(new_nodes))
-
-        try:
-            await asyncio.wait_for(
-                run_pipeline(
-                    session_id=session_id,
-                    seeds=nodes,
-                    news_pool=news_items,
-                    value_pool=value_items,
-                    max_depth=req.max_depth,
-                    on_layer_complete=_on_layer_complete,
-                ),
-                timeout=PIPELINE_TIMEOUT_S,
-            )
-            await col.update_one({"id": session_id}, {"$set": {"status": "complete"}})
-            log.info("AUTO %s: complete", session_id)
-        except asyncio.TimeoutError:
-            log.warning(
-                "AUTO %s: pipeline timed out after %ds", session_id, PIPELINE_TIMEOUT_S
-            )
-            await col.update_one({"id": session_id}, {"$set": {"status": "timeout"}})
-        except Exception as e:
-            log.error("AUTO %s: failed — %s", session_id, e)
-            await col.update_one(
-                {"id": session_id}, {"$set": {"status": "error", "error": str(e)}}
-            )
-
-    asyncio.create_task(_run_with_timeout())
-    return StartResponse(session_id=session_id, status="thinking")
-
-
-@router.get("/{session_id}/events")
-async def session_events(session_id: str):
-    """SSE stream for real-time session updates (placeholder for now)."""
-
-    async def event_stream():
-        # For MVP, just poll session status every 500ms
-        col = mongodb.get_collection("thinking_sessions")
-        last_status = None
-        last_node_count = 0
-
-        for _ in range(120):  # 60 seconds max
-            session = await col.find_one({"id": session_id}, {"_id": 0})
-            if not session:
-                yield f'event: error\ndata: {{"error": "Session not found"}}\n\n'
-                return
-
-            status = session["status"]
-            node_count = len(session["nodes"])
-
-            if status != last_status:
-                yield f"event: status\ndata: {{\"status\": \"{status}\", \"current_layer\": {session['current_layer']}}}\n\n"
-                last_status = status
-
-            if node_count != last_node_count:
-                yield f'event: node_count\ndata: {{"count": {node_count}}}\n\n'
-                last_node_count = node_count
-
-            if status in ("complete", "error"):
-                yield f'event: done\ndata: {{"status": "{status}"}}\n\n'
-                return
-
-            await asyncio.sleep(0.5)
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")

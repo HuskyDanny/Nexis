@@ -54,11 +54,13 @@ from src.api.graphs import router as graphs_router
 from src.api.nodes import router as nodes_router
 from src.api.pools import router as pools_router
 from src.api.thinking import router as thinking_router
+from src.api.thinking_auto import router as thinking_auto_router
 
 app.include_router(graphs_router)
 app.include_router(nodes_router)
 app.include_router(pools_router)
 app.include_router(thinking_router)
+app.include_router(thinking_auto_router)
 
 
 @app.get("/api/health")
