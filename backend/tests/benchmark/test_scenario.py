@@ -1,7 +1,7 @@
 """Tests for benchmark scenario definitions."""
 
 import pytest
-from backend.tests.benchmark.scenarios.iran_escalation import SCENARIO
+from tests.benchmark.scenarios.iran_escalation import SCENARIO
 
 
 class TestScenarioStructure:
