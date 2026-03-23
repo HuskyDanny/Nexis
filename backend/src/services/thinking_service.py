@@ -122,6 +122,7 @@ async def run_layer(
             matches=opportunity_nodes,
             layer=layer,
             max_depth=max_depth,
+            confidence_threshold=confidence_threshold,
         )
     except Exception as e:
         log.warning("Controller failed at layer %d, using default logic: %s", layer, e)

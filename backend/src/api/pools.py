@@ -103,25 +103,38 @@ async def get_live_pools(date: str, market: str = "US", topics: str = ""):
         )
         return {"news": news_doc.get("items", []), "value": value_doc.get("items", [])}
 
-    # --- Cache miss: fetch live in parallel ---
+    # --- Cache miss: fetch live in parallel (return_exceptions to preserve fallback) ---
     log.info("GET /pools/live/%s — cache MISS, fetching live", date)
-    news, value = await asyncio.gather(
+    news_result, value_result = await asyncio.gather(
         fetch_real_news(limit=10, topics=topics),
         asyncio.to_thread(fetch_real_stocks),
+        return_exceptions=True,
     )
 
+    news = news_result if isinstance(news_result, list) else []
+    value = value_result if isinstance(value_result, list) else []
+
+    if isinstance(news_result, Exception):
+        log.warning("Live news fetch failed: %s", news_result)
+    if isinstance(value_result, Exception):
+        log.warning("Live stock fetch failed: %s", value_result)
+
+    # Track whether live fetch succeeded (for cached_at decision)
+    news_fetched_live = isinstance(news_result, list) and bool(news_result)
+    value_fetched_live = isinstance(value_result, list) and bool(value_result)
+
     if not news:
-        log.info("Live news fetch empty, falling back to mock")
+        log.info("Live news fetch empty, falling back to cached")
         news = (news_doc or {}).get("items", [])
 
     if not value:
-        log.info("Live stock fetch empty, falling back to mock")
+        log.info("Live stock fetch empty, falling back to cached")
         value = (value_doc or {}).get("items", [])
 
-    # --- Write back with cached_at timestamp ---
+    # --- Write back with cached_at only if live fetch succeeded (Fix #5) ---
     now_iso = datetime.now(timezone.utc).isoformat()
     writes = []
-    if news:
+    if news_fetched_live and news:
         writes.append(
             collection.update_one(
                 {"type": "news", "date": date, "market": market},
@@ -137,7 +150,7 @@ async def get_live_pools(date: str, market: str = "US", topics: str = ""):
                 upsert=True,
             )
         )
-    if value:
+    if value_fetched_live and value:
         writes.append(
             collection.update_one(
                 {"type": "value", "date": date, "market": market},

@@ -206,7 +206,9 @@ async def think_step(session_id: str):
         # Compute cache key for this layer's parent set
         from src.services.cache import parent_set_hash
 
-        ps_hash = parent_set_hash(sorted(n["id"] for n in parent_nodes))
+        # Hash only current_layer parents (matching toggle_node's read path)
+        current_layer_parents = [n for n in parent_nodes if n["layer"] == current_layer]
+        ps_hash = parent_set_hash(sorted(n["id"] for n in current_layer_parents))
 
         # Write layer_cache in nested dict format: {"layer_cache.<layer>": {ps_hash: {nodes, edges}}}
         # MongoDB dot-notation sets layer_cache[str(next_layer)] = {ps_hash: data} in the document.
@@ -372,10 +374,14 @@ async def match_values(session_id: str):
         len(value_pool),
     )
 
-    # Use run_matcher directly for standalone match requests
+    # Run matcher in executor to avoid blocking the event loop
+    import asyncio
     from src.agents.thinking_crew import run_matcher
 
-    opportunities, match_edges = run_matcher(final_effects, value_pool)
+    loop = asyncio.get_running_loop()
+    opportunities, match_edges = await loop.run_in_executor(
+        None, lambda: run_matcher(final_effects, value_pool)
+    )
 
     # Persist
     if opportunities:

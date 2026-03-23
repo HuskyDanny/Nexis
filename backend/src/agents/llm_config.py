@@ -1,4 +1,8 @@
+import os
 from functools import lru_cache
+
+# Disable CrewAI telemetry before import — avoids 30s timeout on unreachable endpoint
+os.environ.setdefault("CREWAI_TELEMETRY", "false")
 
 from crewai import LLM
 

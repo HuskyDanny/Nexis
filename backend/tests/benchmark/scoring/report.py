@@ -88,10 +88,10 @@ def build_report(
         checkpoint_hit_rate=pass1.checkpoint_hit_rate,
         match_accuracy=pass1.match_accuracy,
         skill_compliance=pass1.skill_compliance,
-        reasoning_correctness=dim_by_name.get("reasoning_correctness", 0.0),
-        reasoning_completeness=dim_by_name.get("reasoning_completeness", 0.0),
-        match_quality=dim_by_name.get("match_quality", 0.0),
-        depth_appropriateness=dim_by_name.get("depth_appropriateness", 0.0),
+        reasoning_correctness=dim_by_name.get("Reasoning Correctness", 0.0),
+        reasoning_completeness=dim_by_name.get("Reasoning Completeness", 0.0),
+        match_quality=dim_by_name.get("Match Quality", 0.0),
+        depth_appropriateness=dim_by_name.get("Depth Appropriateness", 0.0),
     )
 
     return BenchmarkReport(

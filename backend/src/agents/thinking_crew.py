@@ -386,6 +386,7 @@ def run_controller(
     matches: list[dict],
     layer: int,
     max_depth: int,
+    confidence_threshold: float = CONFIDENCE_THRESHOLD,
 ) -> dict:
     """Evaluate reasoning quality and decide whether to continue.
 
@@ -409,12 +410,12 @@ def run_controller(
             "summary": chain_summary,
         }
 
-    if avg_conf < CONFIDENCE_THRESHOLD:
+    if avg_conf < confidence_threshold:
         return {
             "continue": False,
             "reasoning": (
                 f"Average confidence too low ({avg_conf:.0f} < "
-                f"{CONFIDENCE_THRESHOLD}). Further reasoning would be speculative."
+                f"{confidence_threshold}). Further reasoning would be speculative."
             ),
             "summary": chain_summary,
         }
