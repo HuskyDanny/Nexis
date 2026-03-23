@@ -148,3 +148,25 @@ def test_validate_acyclicity_empty_edges():
         ThinkingNode(id="a", layer=0, type=ThinkingNodeType.NEWS, content="x"),
     ]
     assert validate_acyclicity(nodes, []) is True
+
+
+def test_thinking_session_has_layer_cache_default():
+    session = ThinkingSession(date="2026-03-21")
+    assert session.layer_cache == {}
+
+
+def test_thinking_session_layer_cache_stores_data():
+    session = ThinkingSession(
+        date="2026-03-21",
+        layer_cache={
+            "1": {
+                "abc123def456": {
+                    "nodes": [{"id": "e1", "layer": 1}],
+                    "edges": [{"source": "n1", "target": "e1"}],
+                }
+            }
+        },
+    )
+    assert "1" in session.layer_cache
+    assert "abc123def456" in session.layer_cache["1"]
+    assert len(session.layer_cache["1"]["abc123def456"]["nodes"]) == 1

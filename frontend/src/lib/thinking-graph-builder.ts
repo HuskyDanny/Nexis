@@ -61,6 +61,7 @@ export function nodeStyle(
 export function buildThinkingGraph(
   nodes: ThinkingNode[],
   edges: ThinkingEdge[],
+  fixedPositions?: Map<string, { x: number; y: number }>,
 ): { rfNodes: RFNode[]; rfEdges: RFEdge[] } {
   // Build React Flow nodes
   const rfNodes: RFNode[] = nodes.map((n) => ({
@@ -118,6 +119,7 @@ export function buildThinkingGraph(
     iterations: 150,
     layerMap,
     layerRadius: 180,
+    fixedPositions,
   });
 
   return { rfNodes: layoutNodes, rfEdges };

@@ -37,6 +37,8 @@ interface LayoutOptions {
   layerMap?: Map<string, number>;
   /** Radius per layer (pixels). Default: 150 */
   layerRadius?: number;
+  /** Pre-existing positions to pin via fx/fy during simulation */
+  fixedPositions?: Map<string, { x: number; y: number }>;
 }
 
 export function layoutGraph(
@@ -52,14 +54,20 @@ export function layoutGraph(
     center = { x: 0, y: 0 },
     layerMap,
     layerRadius = 150,
+    fixedPositions,
   } = options;
 
-  // Create simulation nodes
-  const simNodes: ForceNode[] = nodes.map((n) => ({
-    id: n.id,
-    x: center.x + (Math.random() - 0.5) * 50,
-    y: center.y + (Math.random() - 0.5) * 50,
-  }));
+  // Create simulation nodes — pin existing positions via fx/fy
+  const simNodes: ForceNode[] = nodes.map((n) => {
+    const fixed = fixedPositions?.get(n.id);
+    return {
+      id: n.id,
+      x: fixed?.x ?? center.x + (Math.random() - 0.5) * 50,
+      y: fixed?.y ?? center.y + (Math.random() - 0.5) * 50,
+      fx: fixed?.x,
+      fy: fixed?.y,
+    };
+  });
 
   // Create simulation links
   const simLinks: ForceLink[] = edges.map((e) => ({
