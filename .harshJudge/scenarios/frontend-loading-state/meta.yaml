@@ -1,0 +1,21 @@
+title: Frontend shows loading state while pools fetch
+slug: frontend-loading-state
+starred: false
+tags:
+  - frontend
+  - ux
+  - loading
+estimatedDuration: 60
+steps:
+  - id: '01'
+    title: Open frontend and verify loading indicator appears
+    file: 01-open-frontend-and-verify-loading-indicator-appears.md
+  - id: '02'
+    title: Verify pools load and UI becomes interactive
+    file: 02-verify-pools-load-and-ui-becomes-interactive.md
+totalRuns: 1
+passCount: 1
+failCount: 0
+lastRun: '2026-03-23T15:47:47.835Z'
+lastResult: pass
+avgDuration: 200

@@ -1,0 +1,9 @@
+{
+  "runId": "jeSrIuzMuZ",
+  "stepId": "01",
+  "type": "custom",
+  "name": "MongoDB seed — 6 entities inserted (2 active + 1 stale each collection)",
+  "capturedAt": "2026-03-23T15:54:26.800Z",
+  "fileSize": 471,
+  "metadata": {}
+}

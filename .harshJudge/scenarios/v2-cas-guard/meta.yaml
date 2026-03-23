@@ -19,9 +19,9 @@ steps:
   - id: '04'
     title: Attempt step on busy session
     file: 04-attempt-step-on-busy-session.md
-totalRuns: 1
-passCount: 1
+totalRuns: 2
+passCount: 2
 failCount: 0
-lastRun: '2026-03-23T01:33:31.026Z'
+lastRun: '2026-03-23T15:53:16.402Z'
 lastResult: pass
-avgDuration: 1400
+avgDuration: 33200

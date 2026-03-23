@@ -1,0 +1,9 @@
+{
+  "runId": "ugagFZTmtL",
+  "stepId": "03",
+  "type": "db_snapshot",
+  "name": "MongoDB status set to \"thinking\" — CAS concurrent access simulation",
+  "capturedAt": "2026-03-23T15:52:52.666Z",
+  "fileSize": 293,
+  "metadata": {}
+}

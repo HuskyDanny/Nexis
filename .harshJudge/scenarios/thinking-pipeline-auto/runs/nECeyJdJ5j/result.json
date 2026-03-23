@@ -1,0 +1,52 @@
+{
+  "runId": "nECeyJdJ5j",
+  "scenarioSlug": "thinking-pipeline-auto",
+  "status": "pass",
+  "startedAt": "2026-03-23T15:44:22.390Z",
+  "completedAt": "2026-03-23T15:45:00.828Z",
+  "duration": 171000,
+  "steps": [
+    {
+      "id": "01",
+      "status": "pass",
+      "duration": 200,
+      "error": null,
+      "evidenceFiles": [
+        "auto-think-start.json"
+      ],
+      "summary": "Auto session started, returned session_id and status=thinking."
+    },
+    {
+      "id": "02",
+      "status": "pass",
+      "duration": 170000,
+      "error": null,
+      "evidenceFiles": [
+        "poll-completion.json"
+      ],
+      "summary": "Session completed in 170s. Not stuck — reached complete status. Layer 2 Thinker got empty LLM response, graceful degradation worked."
+    },
+    {
+      "id": "03",
+      "status": "pass",
+      "duration": 500,
+      "error": null,
+      "evidenceFiles": [
+        "reasoning-quality.json"
+      ],
+      "summary": "6 effects with real causal reasoning, confidence 58-78, information gaps. No template text. Quality verified."
+    },
+    {
+      "id": "04",
+      "status": "pass",
+      "duration": 500,
+      "error": null,
+      "evidenceFiles": [
+        "per-layer-matching.json"
+      ],
+      "summary": "3 opportunities at Layer 1: CVS 63.4%, BAC 54.7%, PYPL 60.4%. Per-layer matching working — matches found at first reasoning layer."
+    }
+  ],
+  "failedStep": null,
+  "errorMessage": null
+}

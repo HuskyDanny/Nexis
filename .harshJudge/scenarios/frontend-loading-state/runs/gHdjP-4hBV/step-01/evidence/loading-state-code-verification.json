@@ -1,0 +1,1 @@
+Code verified: App.tsx line 121 useState(true), line 307 renders spinner + 'Loading pools...' when loading=true, line 126 sets loading=true on mount. No Playwright available — visual verification skipped.

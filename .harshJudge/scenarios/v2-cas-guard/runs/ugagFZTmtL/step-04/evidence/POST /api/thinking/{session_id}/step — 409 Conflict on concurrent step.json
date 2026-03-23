@@ -1,0 +1,1 @@
+{"request":"POST /api/thinking/52c08d4317b7/step","session_status_at_call":"thinking","response":{"detail":"Cannot step: session is thinking (concurrent modification)"},"http_status":409,"expected":409,"match":true}

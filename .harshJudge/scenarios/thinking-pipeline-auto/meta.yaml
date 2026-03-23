@@ -1,0 +1,27 @@
+title: Auto thinking pipeline produces real LLM reasoning with per-layer matching
+slug: thinking-pipeline-auto
+starred: false
+tags:
+  - thinking
+  - pipeline
+  - llm
+estimatedDuration: 60
+steps:
+  - id: '01'
+    title: Start auto thinking session
+    file: 01-start-auto-thinking-session.md
+  - id: '02'
+    title: Poll session until complete or timeout
+    file: 02-poll-session-until-complete-or-timeout.md
+  - id: '03'
+    title: Verify real reasoning quality
+    file: 03-verify-real-reasoning-quality.md
+  - id: '04'
+    title: Verify per-layer matching produced opportunities
+    file: 04-verify-per-layer-matching-produced-opportunities.md
+totalRuns: 1
+passCount: 1
+failCount: 0
+lastRun: '2026-03-23T15:45:00.829Z'
+lastResult: pass
+avgDuration: 171000

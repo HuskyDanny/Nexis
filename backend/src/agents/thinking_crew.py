@@ -121,7 +121,11 @@ def run_thinker(
         raw = result.raw if hasattr(result, "raw") else str(result)
         parsed = parse_json_response(raw)
         if parsed is None:
-            log.warning("Thinker JSON parse failed at layer %d", layer)
+            log.warning(
+                "Thinker JSON parse failed at layer %d. Raw[0:500]: %s",
+                layer,
+                raw[:500],
+            )
             return [], [], [], []
 
         return _build_thinker_output(

@@ -1,0 +1,9 @@
+{
+  "runId": "ugagFZTmtL",
+  "stepId": "02",
+  "type": "custom",
+  "name": "POST /api/thinking/{session_id}/step — first advance",
+  "capturedAt": "2026-03-23T15:52:15.499Z",
+  "fileSize": 183,
+  "metadata": {}
+}
