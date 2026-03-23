@@ -62,6 +62,18 @@ class TestSystemPrompt:
         assert 500 < len(prompt) < 5000  # Not too short, not too long
 
 
+class TestBuildSystemPromptFiltering:
+    def test_build_system_prompt_filters_skills(self):
+        prompt = build_system_prompt(allowed_skills=["macro_economics"])
+        assert "macro_economics" in prompt
+        assert "company_fundamentals" not in prompt
+
+    def test_build_system_prompt_all_skills_when_none(self):
+        prompt = build_system_prompt(allowed_skills=None)
+        assert "macro_economics" in prompt
+        assert "company_fundamentals" in prompt
+
+
 class TestSkillContent:
     def test_each_skill_has_output_format(self):
         """Every skill should guide structured output."""

@@ -2,7 +2,12 @@
 
 from crewai.tools import tool
 
-from src.agents.skills import get_skill, list_skills, get_all_descriptions
+from src.agents.skills import (
+    get_skill,
+    list_skills,
+    get_all_descriptions,
+    get_descriptions_for,
+)
 
 
 @tool("Load Skill")
@@ -17,9 +22,18 @@ def load_skill(skill_name: str) -> str:
     return skill["content"]
 
 
-def build_system_prompt() -> str:
-    """Build the system message with skill descriptions for agent initialization."""
-    descriptions = get_all_descriptions()
+def build_system_prompt(allowed_skills: list[str] | None = None) -> str:
+    """Build the system message with skill descriptions for agent initialization.
+
+    Args:
+        allowed_skills: If provided, only include descriptions for these skill names.
+                        If None, include all available skills.
+    """
+    descriptions = (
+        get_descriptions_for(allowed_skills)
+        if allowed_skills is not None
+        else get_all_descriptions()
+    )
     return f"""You are a senior financial analyst at a top-tier investment firm.
 Your job is to analyze news events and reason about their market impact
 through multiple layers of cause-and-effect thinking.

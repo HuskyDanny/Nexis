@@ -37,6 +37,16 @@ def get_all_descriptions() -> str:
     return "\n".join(f"- {s['name']}: {s['description']}" for s in _skills.values())
 
 
+def get_descriptions_for(skill_names: list[str]) -> str:
+    """Lightweight descriptions filtered to the given skill names."""
+    _scan_skills()
+    return "\n".join(
+        f"- {s['name']}: {s['description']}"
+        for s in _skills.values()
+        if s["name"] in skill_names
+    )
+
+
 def get_skill(name: str) -> dict | None:
     """Get full skill dict by name."""
     _scan_skills()
