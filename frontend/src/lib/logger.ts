@@ -1,5 +1,5 @@
 /**
- * Structured logger for Financial Agent v2 frontend.
+ * Structured logger for Nexis frontend.
  *
  * Two levels:
  *   - PRODUCTION (info): key steps, state transitions

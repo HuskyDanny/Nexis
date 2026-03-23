@@ -1,4 +1,4 @@
-"""CrewAI agent definitions for the Financial Agent v2 thinking pipeline.
+"""CrewAI agent definitions for the Nexis thinking pipeline.
 
 Three crew functions that correspond to pipeline stages:
 1. rank_and_select_news — rank news by market impact (small LLM)
@@ -15,7 +15,7 @@ from crewai import Agent, Crew, Task
 from src.agents.llm_config import get_main_llm, get_small_llm
 from src.agents.skills.base import load_skill, build_system_prompt
 
-log = logging.getLogger("fa2.agents")
+log = logging.getLogger("nexis.agents")
 
 
 def convergence_score(sentiment: float, discount: float, agreement: float) -> float:

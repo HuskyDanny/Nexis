@@ -1,4 +1,4 @@
-"""Structured logging for Financial Agent v2.
+"""Structured logging for Nexis.
 
 Two levels:
   - PRODUCTION (INFO): key steps, state transitions, request summaries
@@ -22,7 +22,7 @@ def _get_log_level() -> int:
 
 def get_logger(name: str) -> logging.Logger:
     """Create a logger with consistent formatting."""
-    logger = logging.getLogger(f"fa2.{name}")
+    logger = logging.getLogger(f"nexis.{name}")
 
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)

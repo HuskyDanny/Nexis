@@ -21,7 +21,7 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     await mongodb.close()
 
 
-app = FastAPI(title="Financial Agent v2", lifespan=lifespan)
+app = FastAPI(title="Nexis", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

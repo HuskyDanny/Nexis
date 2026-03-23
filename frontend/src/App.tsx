@@ -207,9 +207,9 @@ function App() {
           className="text-lg font-bold tracking-wide"
           style={{ color: "#ef4444" }}
         >
-          Financial Agent
+          Nexis
           <span className="text-text-muted font-normal text-sm ml-2 tracking-widest uppercase">
-            v2
+            AI
           </span>
         </h1>
         <div className="flex items-center gap-4">
