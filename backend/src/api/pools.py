@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
+from src.pipelines.news.quota import apply_tiered_quota
 from src.services.data_sources import fetch_real_news, fetch_real_stocks
 
 log = get_logger("api.pools")
@@ -20,12 +21,23 @@ async def get_pools(date: str, market: str = "US", include_stale: bool = False):
     news_col = mongodb.get_collection("news_entities")
     value_col = mongodb.get_collection("value_entities")
 
-    query: dict = {"market": market}
+    # News: global pool — no market filter
+    news_query: dict = {}
     if not include_stale:
-        query["status"] = "active"
+        news_query["status"] = "active"
 
-    news_entities = await news_col.find(query, {"_id": 0}).to_list(length=500)
-    value_entities = await value_col.find(query, {"_id": 0}).to_list(length=500)
+    # Value: market-scoped
+    value_query: dict = {"market": market}
+    if not include_stale:
+        value_query["status"] = "active"
+
+    raw_news = await news_col.find(news_query, {"_id": 0}).to_list(length=500)
+    value_entities = await value_col.find(value_query, {"_id": 0}).to_list(length=500)
+
+    # Apply tiered quota to guarantee macro news representation
+    news_entities = apply_tiered_quota(
+        sorted(raw_news, key=lambda x: x.get("score", 0), reverse=True)
+    )
 
     # Legacy fallback during migration
     if not news_entities and not value_entities:

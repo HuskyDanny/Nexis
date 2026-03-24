@@ -8,7 +8,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.core.logger import get_logger
+from src.core.config import settings
 from src.database.mongodb import mongodb
+from src.database.repositories.news_entity_repo import NewsEntityRepo
+from src.pipelines.news.quota import apply_tiered_quota
 from src.services.thinking_service import run_layer
 from src.services.data_sources import fetch_real_news, fetch_real_stocks
 
@@ -65,26 +68,28 @@ async def start_thinking(req: StartRequest):
         req.max_depth,
     )
 
-    # Load pools — try MongoDB first, fall back to live APIs
-    pools_col = mongodb.get_collection("pools")
-    news_pool = await pools_col.find_one(
-        {"type": "news", "date": req.date, "market": req.market}, {"_id": 0}
+    # News: load from news_entities (global, no market filter) with tiered quota
+    news_repo = NewsEntityRepo(mongodb.get_collection("news_entities"))
+    all_news = await news_repo.get_active()  # No market filter
+    news_items = apply_tiered_quota(
+        sorted(all_news, key=lambda x: x.get("score", 0), reverse=True),
+        macro_ratio=settings.news_macro_quota_ratio,
     )
+
+    # Value: keep legacy path (market-scoped)
+    pools_col = mongodb.get_collection("pools")
     value_pool = await pools_col.find_one(
         {"type": "value", "date": req.date, "market": req.market}, {"_id": 0}
     )
-
-    news_items = (news_pool or {}).get("items", [])
     value_items = (value_pool or {}).get("items", [])
 
     # If no cached data, fetch live
-    if not news_items or not value_items:
-        if not news_items:
-            log.info("No cached news for %s, fetching live", req.date)
-            news_items = await fetch_real_news(limit=10, topics="financial_markets")
-        if not value_items:
-            log.info("No cached values for %s, fetching live", req.date)
-            value_items = await asyncio.to_thread(fetch_real_stocks)
+    if not news_items:
+        log.info("No active news entities for %s, fetching live", req.date)
+        news_items = await fetch_real_news(limit=10, topics="financial_markets")
+    if not value_items:
+        log.info("No cached values for %s, fetching live", req.date)
+        value_items = await asyncio.to_thread(fetch_real_stocks)
 
     # If specific news IDs selected, filter; otherwise use all
     if req.selected_news_ids:
