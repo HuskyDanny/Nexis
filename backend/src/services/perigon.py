@@ -93,7 +93,13 @@ def _classify_scope(article: dict) -> int:
         return 1
 
     # Company-specific (SEC filings, earnings, single company)
-    company_override_topics = {"markets", "economy", "federal reserve", "trade", "geopolitical"}
+    company_override_topics = {
+        "markets",
+        "economy",
+        "federal reserve",
+        "trade",
+        "geopolitical",
+    }
     if len(companies) == 1 and not any(t in company_override_topics for t in topics):
         return 1
 
@@ -293,17 +299,16 @@ def _story_to_pool_item(story: dict) -> dict:
 
     topics = [t.get("name", "") for t in story.get("topics", [])]
     categories = [c.get("name", "") for c in story.get("categories", [])]
-    num_articles = story.get("numArticles", story.get("articles_count", 0))
+    num_articles = story.get("uniqueCount", story.get("totalCount", 0))
 
     return {
-        "id": f"pg-story-{story.get('storyId', '')[:10]}",
+        "id": f"pg-story-{story.get('id', '')[:10]}",
         "type": "news_event",
         "origin": "perigon",
-        "title": story.get("title", ""),
+        "title": story.get("name", ""),
         "source": "perigon-stories",
-        "url": story.get("url", ""),
         "summary": story.get("summary", "")[:200],
-        "published_at": story.get("initialPublishedAt", story.get("updatedAt", "")),
+        "published_at": story.get("initializedAt", story.get("updatedAt", "")),
         "direction": direction,
         "confidence": round(max(pos, neg) * 100),
         "sectors": (topics + categories)[:5],
@@ -328,7 +333,7 @@ async def fetch_perigon_stories(
     """Fetch clustered stories from Perigon /v1/stories endpoint.
 
     Stories represent clusters of articles about the same event.
-    High numArticles = broad coverage = likely high-impact macro event.
+    High uniqueCount = broad coverage = likely high-impact macro event.
     Returns pool items sorted by cluster size descending.
     """
     if not PERIGON_API_KEY:
@@ -362,7 +367,7 @@ async def fetch_perigon_stories(
         )
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(
-                f"{PERIGON_BASE_URL}/stories",
+                f"{PERIGON_BASE_URL}/stories/all",
                 params={
                     "apiKey": PERIGON_API_KEY,
                     "size": size,
@@ -380,7 +385,7 @@ async def fetch_perigon_stories(
             log.error("Perigon stories error: %s", data.get("message", "unknown"))
             return []
 
-        stories = data.get("results", data.get("stories", []))
+        stories = data.get("results", [])
         pool_items = [_story_to_pool_item(s) for s in stories]
 
         # Sort by cluster size descending — bigger clusters = more macro signal
