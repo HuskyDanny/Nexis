@@ -1,12 +1,18 @@
-"""Thinking DAG API — start sessions, step through layers, toggle nodes, match values."""
+"""Thinking DAG API — start sessions, step through layers, toggle nodes, match values.
+
+Auto-pipeline and SSE endpoints live in thinking_auto.py.
+"""
 
 import asyncio
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
+from src.services.thinking_service import run_layer
+from src.services.data_sources import fetch_real_news, fetch_real_stocks
+
+# Auto-pipeline and SSE endpoints are in thinking_auto.py
 
 log = get_logger("api.thinking")
 router = APIRouter(prefix="/api/thinking", tags=["thinking"])
@@ -73,9 +79,6 @@ async def start_thinking(req: StartRequest):
 
     # If no cached data, fetch live
     if not news_items or not value_items:
-        import asyncio
-        from src.services.data_sources import fetch_real_news, fetch_real_stocks
-
         if not news_items:
             log.info("No cached news for %s, fetching live", req.date)
             news_items = await fetch_real_news(limit=10, topics="financial_markets")
@@ -124,6 +127,8 @@ async def start_thinking(req: StartRequest):
         "news_pool": news_items,
         "value_pool": value_items,
         "layer_cache": {},
+        "chain_summaries": {},
+        "confidence_threshold": 35,
     }
 
     col = mongodb.get_collection("thinking_sessions")
@@ -176,33 +181,42 @@ async def think_step(session_id: str):
     log.info("Session %s: stepping to layer %d", session_id, next_layer)
 
     try:
-        # Get selected nodes from current layer as context
         parent_nodes = [
             n for n in session["nodes"] if n["selected"] and n["layer"] <= current_layer
         ]
-        current_layer_nodes = [n for n in parent_nodes if n["layer"] == current_layer]
-        existing_ids = {n["id"] for n in session["nodes"]}
         news_pool = session.get("news_pool", [])
+        value_pool = session.get("value_pool", [])
+        chain_summaries = session.get("chain_summaries", {})
+        chain_summary = chain_summaries.get(str(current_layer), "")
 
-        # Dispatch to thinking service (real agents or mock fallback)
-        from src.services.thinking_service import think_effects
-
-        new_nodes, new_edges = await think_effects(
-            parent_nodes,
-            news_pool,
-            current_layer_nodes,
-            next_layer,
-            existing_ids,
+        result = await run_layer(
+            chain_summary=chain_summary,
+            parent_nodes=parent_nodes,
+            news_pool=news_pool,
+            value_pool=value_pool,
+            layer=next_layer,
+            max_depth=session["max_depth"],
+            confidence_threshold=session.get("confidence_threshold", 35),
         )
 
-        # Compute cache key from selected parents at current layer
+        new_nodes = result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
+        new_edges = result.all_edges
+        ctrl_summary = result.controller_decision.get("summary", "")
+
+        # Compute cache key for this layer's parent set
         from src.services.cache import parent_set_hash
 
-        selected_parent_ids = [n["id"] for n in current_layer_nodes]
-        ps_hash = parent_set_hash(selected_parent_ids)
-        cache_key = f"layer_cache.{next_layer}.{ps_hash}"
+        # Hash only current_layer parents (matching toggle_node's read path)
+        current_layer_parents = [n for n in parent_nodes if n["layer"] == current_layer]
+        ps_hash = parent_set_hash(sorted(n["id"] for n in current_layer_parents))
 
-        # Persist new nodes and edges
+        # Write layer_cache in nested dict format: {"layer_cache.<layer>": {ps_hash: {nodes, edges}}}
+        # MongoDB dot-notation sets layer_cache[str(next_layer)] = {ps_hash: data} in the document.
+        # The read path in toggle_node does: layer_cache.get(str(layer), {}).get(ps_hash)
+        # which matches this nested structure.
+        cache_set_key = f"layer_cache.{next_layer}"
+        cache_value = {ps_hash: {"nodes": new_nodes, "edges": new_edges}}
+
         if new_nodes:
             await col.update_one(
                 {"id": session_id},
@@ -214,14 +228,22 @@ async def think_step(session_id: str):
                     "$set": {
                         "current_layer": next_layer,
                         "status": "paused",
-                        cache_key: {"nodes": new_nodes, "edges": new_edges},
+                        f"chain_summaries.{next_layer}": ctrl_summary,
+                        cache_set_key: cache_value,
                     },
                 },
             )
         else:
             await col.update_one(
                 {"id": session_id},
-                {"$set": {"current_layer": next_layer, "status": "paused"}},
+                {
+                    "$set": {
+                        "current_layer": next_layer,
+                        "status": "paused",
+                        f"chain_summaries.{next_layer}": ctrl_summary,
+                        cache_set_key: cache_value,
+                    },
+                },
             )
 
         log.info(
@@ -352,13 +374,13 @@ async def match_values(session_id: str):
         len(value_pool),
     )
 
-    opp_layer = current_layer + 1
+    # Run matcher in executor to avoid blocking the event loop
+    import asyncio
+    from src.agents.thinking_crew import run_matcher
 
-    # Dispatch to thinking service (real agents or mock fallback)
-    from src.services.thinking_service import match_opportunities
-
-    opportunities, new_edges = await match_opportunities(
-        final_effects, value_pool, opp_layer
+    loop = asyncio.get_running_loop()
+    opportunities, match_edges = await loop.run_in_executor(
+        None, lambda: run_matcher(final_effects, value_pool)
     )
 
     # Persist
@@ -368,7 +390,7 @@ async def match_values(session_id: str):
             {
                 "$push": {
                     "nodes": {"$each": opportunities},
-                    "edges": {"$each": new_edges},
+                    "edges": {"$each": match_edges},
                 },
                 "$set": {"status": "complete"},
             },
@@ -378,201 +400,3 @@ async def match_values(session_id: str):
 
     log.info("Session %s: found %d opportunities", session_id, len(opportunities))
     return {"opportunities": opportunities}
-
-
-@router.post("/auto", response_model=StartResponse)
-async def auto_think(req: StartRequest):
-    """Full auto pipeline: create session → select top news → think all layers → match.
-    Returns session_id. Poll GET /thinking/:id to watch progress."""
-    from uuid import uuid4
-    from datetime import datetime, timezone
-    import asyncio
-
-    session_id = uuid4().hex[:12]
-    log.info(
-        "AUTO session %s for %s/%s max_depth=%d",
-        session_id,
-        req.date,
-        req.market,
-        req.max_depth,
-    )
-
-    # Load pools
-    pools_col = mongodb.get_collection("pools")
-    news_pool = await pools_col.find_one(
-        {"type": "news", "date": req.date, "market": req.market}, {"_id": 0}
-    )
-    value_pool = await pools_col.find_one(
-        {"type": "value", "date": req.date, "market": req.market}, {"_id": 0}
-    )
-
-    news_items = (news_pool or {}).get("items", [])
-    value_items = (value_pool or {}).get("items", [])
-
-    # Fetch live if no cached data
-    if not news_items or not value_items:
-        from src.services.data_sources import fetch_real_news, fetch_real_stocks
-
-        if not news_items:
-            news_items = await fetch_real_news(limit=10, topics="financial_markets")
-        if not value_items:
-            value_items = await asyncio.to_thread(fetch_real_stocks)
-
-    # Auto-select: sort by confidence (impact) descending, take top 5
-    sorted_news = sorted(news_items, key=lambda n: n.get("confidence", 0), reverse=True)
-    selected = sorted_news[:5]
-    log.info("Auto-selected %d/%d news by impact", len(selected), len(news_items))
-
-    # Create seed nodes
-    nodes = []
-    for news in selected:
-        nodes.append(
-            {
-                "id": news["id"],
-                "layer": 0,
-                "type": "news",
-                "content": news.get("title", news.get("summary", "")),
-                "reasoning": "",
-                "sources": [news.get("url", "")],
-                "parents": [],
-                "selected": True,
-                "metadata": {
-                    k: v
-                    for k, v in news.items()
-                    if k not in ("id", "title", "summary", "url")
-                },
-            }
-        )
-
-    session = {
-        "id": session_id,
-        "date": req.date,
-        "market": req.market,
-        "max_depth": req.max_depth,
-        "nodes": nodes,
-        "edges": [],
-        "status": "thinking",
-        "current_layer": 0,
-        "error": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "news_pool": news_items,
-        "value_pool": value_items,
-    }
-
-    col = mongodb.get_collection("thinking_sessions")
-    await col.insert_one(session)
-
-    # Run all layers + match in background
-    async def _run_pipeline():
-        try:
-            from src.services.thinking_service import think_effects, match_opportunities
-
-            current_nodes = list(nodes)
-            current_edges: list[dict] = []
-            current_layer = 0
-
-            for layer in range(1, req.max_depth + 1):
-                parent_nodes = [
-                    n
-                    for n in current_nodes
-                    if n["selected"] and n["layer"] <= current_layer
-                ]
-                current_layer_nodes = [
-                    n for n in parent_nodes if n["layer"] == current_layer
-                ]
-                existing_ids = {n["id"] for n in current_nodes}
-
-                new_nodes, new_edges = await think_effects(
-                    parent_nodes,
-                    news_items,
-                    current_layer_nodes,
-                    layer,
-                    existing_ids,
-                )
-
-                current_nodes.extend(new_nodes)
-                current_edges.extend(new_edges)
-                current_layer = layer
-
-                await col.update_one(
-                    {"id": session_id},
-                    {
-                        "$push": {
-                            "nodes": {"$each": new_nodes},
-                            "edges": {"$each": new_edges},
-                        },
-                        "$set": {"current_layer": layer, "status": "thinking"},
-                    },
-                )
-                log.info(
-                    "AUTO %s: layer %d — %d nodes", session_id, layer, len(new_nodes)
-                )
-
-            # Match
-            final_effects = [
-                n
-                for n in current_nodes
-                if n["selected"]
-                and n["layer"] == current_layer
-                and n["type"] == "effect"
-            ]
-            opp_layer = current_layer + 1
-            opps, opp_edges = await match_opportunities(
-                final_effects, value_items, opp_layer
-            )
-
-            update: dict = {"$set": {"status": "complete"}}
-            if opps:
-                update["$push"] = {
-                    "nodes": {"$each": opps},
-                    "edges": {"$each": opp_edges},
-                }
-            await col.update_one({"id": session_id}, update)
-            log.info("AUTO %s: complete — %d opportunities", session_id, len(opps))
-
-        except Exception as e:
-            log.error("AUTO %s: failed — %s", session_id, e)
-            await col.update_one(
-                {"id": session_id}, {"$set": {"status": "error", "error": str(e)}}
-            )
-
-    # Fire and forget — frontend polls session state
-    asyncio.create_task(_run_pipeline())
-
-    return StartResponse(session_id=session_id, status="thinking")
-
-
-@router.get("/{session_id}/events")
-async def session_events(session_id: str):
-    """SSE stream for real-time session updates (placeholder for now)."""
-
-    async def event_stream():
-        # For MVP, just poll session status every 500ms
-        col = mongodb.get_collection("thinking_sessions")
-        last_status = None
-        last_node_count = 0
-
-        for _ in range(120):  # 60 seconds max
-            session = await col.find_one({"id": session_id}, {"_id": 0})
-            if not session:
-                yield f'event: error\ndata: {{"error": "Session not found"}}\n\n'
-                return
-
-            status = session["status"]
-            node_count = len(session["nodes"])
-
-            if status != last_status:
-                yield f"event: status\ndata: {{\"status\": \"{status}\", \"current_layer\": {session['current_layer']}}}\n\n"
-                last_status = status
-
-            if node_count != last_node_count:
-                yield f'event: node_count\ndata: {{"count": {node_count}}}\n\n'
-                last_node_count = node_count
-
-            if status in ("complete", "error"):
-                yield f'event: done\ndata: {{"status": "{status}"}}\n\n'
-                return
-
-            await asyncio.sleep(0.5)
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")

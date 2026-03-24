@@ -16,6 +16,19 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     log.info("Starting up — connecting to MongoDB")
     await mongodb.connect(settings.mongodb_url)
     log.info("MongoDB connected")
+
+    # Sweep stuck sessions (thinking for >10 min) → mark as timeout
+    from datetime import datetime, timezone, timedelta
+
+    col = mongodb.get_collection("thinking_sessions")
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+    result = await col.update_many(
+        {"status": "thinking", "created_at": {"$lt": cutoff}},
+        {"$set": {"status": "timeout"}},
+    )
+    if result.modified_count:
+        log.info("Cleaned up %d stuck thinking sessions", result.modified_count)
+
     log.info("Connecting to Redis")
     try:
         await redis_client.connect(settings.redis_url)
@@ -41,11 +54,13 @@ from src.api.graphs import router as graphs_router
 from src.api.nodes import router as nodes_router
 from src.api.pools import router as pools_router
 from src.api.thinking import router as thinking_router
+from src.api.thinking_auto import router as thinking_auto_router
 
 app.include_router(graphs_router)
 app.include_router(nodes_router)
 app.include_router(pools_router)
 app.include_router(thinking_router)
+app.include_router(thinking_auto_router)
 
 
 @app.get("/api/health")

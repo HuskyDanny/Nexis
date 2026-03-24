@@ -1,0 +1,44 @@
+{
+  "runId": "ugagFZTmtL",
+  "scenarioSlug": "v2-cas-guard",
+  "status": "pass",
+  "startedAt": "2026-03-23T15:48:49.275Z",
+  "completedAt": "2026-03-23T15:53:16.401Z",
+  "duration": 65000,
+  "steps": [
+    {
+      "id": "01",
+      "status": "pass",
+      "duration": 312,
+      "error": null,
+      "evidenceFiles": [],
+      "summary": null
+    },
+    {
+      "id": "02",
+      "status": "pass",
+      "duration": 32000,
+      "error": null,
+      "evidenceFiles": [],
+      "summary": null
+    },
+    {
+      "id": "03",
+      "status": "pass",
+      "duration": 450,
+      "error": null,
+      "evidenceFiles": [],
+      "summary": null
+    },
+    {
+      "id": "04",
+      "status": "pass",
+      "duration": 280,
+      "error": null,
+      "evidenceFiles": [],
+      "summary": null
+    }
+  ],
+  "failedStep": null,
+  "errorMessage": null
+}

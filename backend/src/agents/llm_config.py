@@ -1,7 +1,12 @@
 import os
 from functools import lru_cache
 
+# Disable CrewAI telemetry before import — avoids 30s timeout on unreachable endpoint
+os.environ.setdefault("CREWAI_TELEMETRY", "false")
+
 from crewai import LLM
+
+from src.core.config import settings
 
 SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
 MAIN_MODEL = "openai/Pro/MiniMaxAI/MiniMax-M2.5"
@@ -9,14 +14,14 @@ SMALL_MODEL = "openai/Qwen/Qwen3-8B"
 
 
 def _get_api_key() -> str:
-    key = os.environ.get("SILICONFLOW_API_KEY")
+    key = settings.siliconflow_api_key
     if not key:
-        raise ValueError("SILICONFLOW_API_KEY environment variable is required")
+        raise ValueError("SILICONFLOW_API_KEY is required (set in .env or environment)")
     return key
 
 
 def is_llm_available() -> bool:
-    return bool(os.environ.get("SILICONFLOW_API_KEY"))
+    return bool(settings.siliconflow_api_key)
 
 
 @lru_cache(maxsize=1)

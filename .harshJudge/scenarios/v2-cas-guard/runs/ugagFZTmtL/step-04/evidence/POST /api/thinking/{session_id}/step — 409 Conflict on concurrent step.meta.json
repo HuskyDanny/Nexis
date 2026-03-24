@@ -1,0 +1,9 @@
+{
+  "runId": "ugagFZTmtL",
+  "stepId": "04",
+  "type": "custom",
+  "name": "POST /api/thinking/{session_id}/step — 409 Conflict on concurrent step",
+  "capturedAt": "2026-03-23T15:53:07.673Z",
+  "fileSize": 215,
+  "metadata": {}
+}

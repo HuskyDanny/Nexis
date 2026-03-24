@@ -1,0 +1,21 @@
+title: Pool cache-first loading returns fast on second call
+slug: pool-cache-first
+starred: false
+tags:
+  - pools
+  - cache
+  - performance
+estimatedDuration: 60
+steps:
+  - id: '01'
+    title: First call fetches live and caches
+    file: 01-first-call-fetches-live-and-caches.md
+  - id: '02'
+    title: Second call returns from cache instantly
+    file: 02-second-call-returns-from-cache-instantly.md
+totalRuns: 1
+passCount: 1
+failCount: 0
+lastRun: '2026-03-23T15:36:41.491Z'
+lastResult: pass
+avgDuration: 34

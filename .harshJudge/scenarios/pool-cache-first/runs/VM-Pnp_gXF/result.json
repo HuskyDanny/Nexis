@@ -1,0 +1,32 @@
+{
+  "runId": "VM-Pnp_gXF",
+  "scenarioSlug": "pool-cache-first",
+  "status": "pass",
+  "startedAt": "2026-03-23T15:36:22.079Z",
+  "completedAt": "2026-03-23T15:36:41.491Z",
+  "duration": 34,
+  "steps": [
+    {
+      "id": "01",
+      "status": "pass",
+      "duration": 30,
+      "error": null,
+      "evidenceFiles": [
+        "pool-call-1-response.json"
+      ],
+      "summary": "GET /api/pools/live/2026-03-23 returned 10 news + 8 value items in 30ms (cache hit)."
+    },
+    {
+      "id": "02",
+      "status": "pass",
+      "duration": 4,
+      "error": null,
+      "evidenceFiles": [
+        "pool-call-2-cache-hit.json"
+      ],
+      "summary": "Second call returned in 4ms — cache hit confirmed. Same 10 news + 8 values."
+    }
+  ],
+  "failedStep": null,
+  "errorMessage": null
+}

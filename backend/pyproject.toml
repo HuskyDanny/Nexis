@@ -23,6 +23,9 @@ packages = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "benchmark: Benchmark tests (deselect with '-m not benchmark')",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "pytest-cov>=6.0", "httpx>=0.28"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "pytest-cov>=6.0", "httpx>=0.28", "deepeval>=2.0"]

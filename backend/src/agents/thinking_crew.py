@@ -1,9 +1,16 @@
-"""CrewAI agent definitions for the Nexis thinking pipeline.
+"""Three-agent thinking pipeline: Thinker, Matcher, Controller.
 
-Three crew functions that correspond to pipeline stages:
-1. rank_and_select_news — rank news by market impact (small LLM)
-2. think_effects — reason about causal effects from parent nodes (main LLM)
-3. match_opportunities — match effects against value stocks (main LLM)
+Each function creates a specialized CrewAI agent, kicks off a crew,
+parses the JSON response, and constructs graph nodes/edges.
+
+Public API:
+- run_thinker()    — causal effects reasoning
+- run_matcher()    — value opportunity matching
+- run_controller() — meta-reasoning and termination
+
+Re-exported from thinking_helpers:
+- convergence_score(), _parse_json_response()
+- THINKER_SKILLS, MATCHER_SKILLS
 """
 
 import json
@@ -12,107 +19,41 @@ from uuid import uuid4
 
 from crewai import Agent, Crew, Task
 
-from src.agents.llm_config import get_main_llm, get_small_llm
-from src.agents.skills.base import load_skill, build_system_prompt
+from src.agents.llm_config import get_main_llm
+from src.agents.skills.base import build_system_prompt, load_skill
+from src.agents.thinking_helpers import (
+    CONFIDENCE_THRESHOLD,
+    MATCHER_SKILLS,
+    THINKER_SKILLS,
+    convergence_score,
+    parse_json_response,
+)
 
 log = logging.getLogger("nexis.agents")
 
-
-def convergence_score(sentiment: float, discount: float, agreement: float) -> float:
-    """Deterministic convergence score: sentiment*0.3 + discount*0.3 + agreement*0.4."""
-    return round(min(100.0, sentiment * 0.3 + discount * 0.3 + agreement * 0.4), 1)
+# Re-export for backward compat and test access
+_parse_json_response = parse_json_response
 
 
-def rank_and_select_news(news_pool: list[dict]) -> list[dict]:
-    """Use small LLM to rank news items by market impact.
-
-    Returns news items sorted by impact score (highest first).
-    Falls back to returning all news unchanged if LLM fails.
-    """
-    if not news_pool:
-        return []
-
-    try:
-        ranker = Agent(
-            role="News Impact Ranker",
-            goal="Rank financial news items by their potential market impact",
-            backstory=(
-                "You are a senior financial analyst who specializes in quickly "
-                "assessing which news headlines will move markets the most."
-            ),
-            llm=get_small_llm(),
-            verbose=False,
-        )
-
-        news_summary = json.dumps(
-            [
-                {"id": n.get("id", ""), "title": n.get("title", n.get("summary", ""))}
-                for n in news_pool
-            ],
-            ensure_ascii=False,
-        )
-
-        rank_task = Task(
-            description=(
-                f"Rank the following news items by potential market impact (high to low). "
-                f"Return a JSON array of objects with 'id' and 'impact_score' (0-100).\n\n"
-                f"News items:\n{news_summary}\n\n"
-                f"Return ONLY valid JSON, no explanation."
-            ),
-            expected_output="A JSON array of {id, impact_score} sorted by impact_score descending.",
-            agent=ranker,
-        )
-
-        crew = Crew(agents=[ranker], tasks=[rank_task], verbose=False)
-        result = crew.kickoff()
-
-        # Parse LLM response
-        raw = result.raw if hasattr(result, "raw") else str(result)
-        # Extract JSON from response (handle markdown code blocks)
-        if "```" in raw:
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        ranked = json.loads(raw.strip())
-
-        # Build id -> score map
-        score_map = {item["id"]: item.get("impact_score", 50) for item in ranked}
-
-        # Sort news pool by score
-        sorted_news = sorted(
-            news_pool,
-            key=lambda n: score_map.get(n.get("id", ""), 50),
-            reverse=True,
-        )
-        log.info("Ranked %d news items by impact", len(sorted_news))
-        return sorted_news
-
-    except Exception as e:
-        log.warning("News ranking failed, returning all news unsorted: %s", e)
-        return list(news_pool)
-
-
-def think_effects(
-    parent_nodes: list[dict], news_pool: list[dict], layer: int
-) -> tuple[list[dict], list[dict]]:
-    """Use main LLM to reason about causal effects of parent nodes.
-
-    Args:
-        parent_nodes: Selected nodes from the current layer to reason about.
-        news_pool: Full news pool the agent can reference for additional context.
-        layer: The target layer number for new effect nodes.
+def run_thinker(
+    parent_nodes: list[dict],
+    chain_summary: str,
+    news_pool: list[dict],
+    layer: int,
+) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    """Trace causal effects one layer deeper.
 
     Returns:
-        (new_nodes, new_edges) matching ThinkingNode/ThinkingEdge schema.
+        (effect_nodes, fetch_nodes, effect_edges, fetch_edges)
     """
     if not parent_nodes:
-        return [], []
+        return [], [], [], []
 
     try:
-        system_prompt = build_system_prompt()
+        system_prompt = build_system_prompt(allowed_skills=THINKER_SKILLS)
         thinker = Agent(
             role="Financial Effects Analyst",
-            goal="Identify causal market effects from financial events using your analytical skills",
+            goal="Identify causal market effects using your analytical skills",
             backstory=system_prompt,
             llm=get_main_llm(),
             tools=[load_skill],
@@ -124,7 +65,8 @@ def think_effects(
                 {
                     "id": n.get("id", ""),
                     "content": n.get("content", ""),
-                    "type": n.get("type", ""),
+                    "reasoning": n.get("reasoning", ""),
+                    "confidence": n.get("confidence", 50),
                     "metadata": n.get("metadata", {}),
                 }
                 for n in parent_nodes
@@ -134,27 +76,39 @@ def think_effects(
 
         pool_json = json.dumps(
             [
-                {"id": n.get("id", ""), "title": n.get("title", n.get("summary", ""))}
-                for n in news_pool[:20]  # limit context size
+                {
+                    "id": n.get("id", ""),
+                    "title": n.get("title", n.get("summary", "")),
+                    "summary": n.get("summary", ""),
+                }
+                for n in news_pool[:20]
             ],
             ensure_ascii=False,
         )
 
-        existing_ids = {n.get("id", "") for n in parent_nodes}
+        chain_ctx = (
+            f"Chain summary so far:\n{chain_summary}\n\n" if chain_summary else ""
+        )
 
         think_task = Task(
             description=(
-                f"Analyze these financial events and identify their market effects.\n\n"
-                f"Parent nodes (layer {layer - 1}):\n{parents_json}\n\n"
-                f"Available news pool (you may reference relevant items):\n{pool_json}\n\n"
-                f"For each effect you identify:\n"
-                f"1. Explain the causal chain (reasoning)\n"
-                f"2. List which parent node(s) cause it (parent_ids)\n"
-                f"3. Note if you used any news from the pool (fetched_news_ids)\n"
-                f"4. Identify the affected sector\n\n"
-                f"Return a JSON object with:\n"
-                f"- 'effects': array of {{'content': str, 'reasoning': str, "
-                f"'parent_ids': [str], 'sector': str, 'fetched_news_ids': [str]}}\n\n"
+                f"{chain_ctx}"
+                f"Analyze these financial events and identify their next-order "
+                f"market effects.\n\n"
+                f"Parent nodes (layers 0-{layer - 1}):\n{parents_json}\n\n"
+                f"Available news pool:\n{pool_json}\n\n"
+                f"For each effect:\n"
+                f"1. Content — what happens\n"
+                f"2. Reasoning — the causal chain from parent(s)\n"
+                f"3. Confidence (0-100) — naturally lower for deeper chains\n"
+                f"4. Parent IDs — which parent(s) cause it\n"
+                f"5. Sector — affected sector\n"
+                f"6. Fetched news IDs — any news from pool you reference\n"
+                f"7. Information gaps — what you wish you knew\n\n"
+                f"Return JSON:\n"
+                f'{{"effects": [{{"content": str, "reasoning": str, '
+                f'"confidence": int, "parent_ids": [str], "sector": str, '
+                f'"fetched_news_ids": [str], "information_gaps": [str]}}]}}\n\n'
                 f"Return ONLY valid JSON."
             ),
             expected_output="JSON object with 'effects' array.",
@@ -165,118 +119,136 @@ def think_effects(
         result = crew.kickoff()
 
         raw = result.raw if hasattr(result, "raw") else str(result)
-        if "```" in raw:
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        parsed = json.loads(raw.strip())
+        parsed = parse_json_response(raw)
+        if parsed is None:
+            log.warning(
+                "Thinker JSON parse failed at layer %d. Raw[0:500]: %s",
+                layer,
+                raw[:500],
+            )
+            return [], [], [], []
 
-        effects = parsed.get("effects", [])
-        new_nodes: list[dict] = []
-        new_edges: list[dict] = []
+        return _build_thinker_output(
+            parsed.get("effects", []), parent_nodes, news_pool, layer
+        )
 
-        for effect in effects:
-            effect_id = uuid4().hex[:12]
-            parent_ids = [
-                pid for pid in effect.get("parent_ids", []) if pid in existing_ids
-            ]
-            if not parent_ids:
-                # Default to first parent if LLM didn't specify valid parents
-                parent_ids = [parent_nodes[0]["id"]]
+    except Exception as e:
+        log.error("run_thinker failed at layer %d: %s", layer, e)
+        return [], [], [], []
 
-            new_nodes.append(
+
+def _build_thinker_output(
+    effects: list[dict],
+    parent_nodes: list[dict],
+    news_pool: list[dict],
+    layer: int,
+) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    """Construct nodes and edges from parsed thinker effects."""
+    existing_ids = {n.get("id", "") for n in parent_nodes}
+    effect_nodes: list[dict] = []
+    fetch_nodes: list[dict] = []
+    effect_edges: list[dict] = []
+    fetch_edges: list[dict] = []
+
+    for effect in effects:
+        effect_id = uuid4().hex[:12]
+        parent_ids = [
+            pid for pid in effect.get("parent_ids", []) if pid in existing_ids
+        ]
+        if not parent_ids:
+            parent_ids = [parent_nodes[0]["id"]]
+
+        effect_nodes.append(
+            {
+                "id": effect_id,
+                "layer": layer,
+                "type": "effect",
+                "content": effect.get("content", "Unknown effect"),
+                "reasoning": effect.get("reasoning", ""),
+                "confidence": effect.get("confidence", 50),
+                "sources": [],
+                "parents": parent_ids,
+                "selected": True,
+                "metadata": {
+                    "sector": effect.get("sector", "general"),
+                    "parent_count": len(parent_ids),
+                    "information_gaps": effect.get("information_gaps", []),
+                },
+            }
+        )
+
+        for pid in parent_ids:
+            effect_edges.append(
                 {
-                    "id": effect_id,
-                    "layer": layer,
-                    "type": "effect",
-                    "content": effect.get("content", "Unknown effect"),
-                    "reasoning": effect.get("reasoning", ""),
-                    "sources": [],
-                    "parents": parent_ids,
-                    "selected": True,
-                    "metadata": {
-                        "sector": effect.get("sector", "general"),
-                        "parent_count": len(parent_ids),
-                    },
+                    "source": pid,
+                    "target": effect_id,
+                    "relationship": "causes" if layer == 1 else "compounds",
                 }
             )
 
-            for pid in parent_ids:
-                new_edges.append(
+        # Handle fetched news references
+        for fetched_id in effect.get("fetched_news_ids", []):
+            if fetched_id in existing_ids:
+                continue
+            fetched_item = next(
+                (n for n in news_pool if n.get("id") == fetched_id), None
+            )
+            if fetched_item:
+                fetch_node_id = f"fetch-{uuid4().hex[:8]}"
+                title = fetched_item.get("title", fetched_item.get("summary", ""))
+                fetch_nodes.append(
                     {
-                        "source": pid,
-                        "target": effect_id,
-                        "relationship": "causes" if layer == 1 else "compounds",
+                        "id": fetch_node_id,
+                        "layer": layer,
+                        "type": "fetch",
+                        "content": f"Related: {title}",
+                        "reasoning": "Agent fetched this news for context",
+                        "confidence": 100,
+                        "sources": [fetched_item.get("url", "")],
+                        "parents": [parent_ids[0]],
+                        "selected": True,
+                        "metadata": fetched_item,
                     }
                 )
-
-            # Handle fetched news references
-            for fetched_id in effect.get("fetched_news_ids", []):
-                if fetched_id in existing_ids:
-                    continue  # already in the graph
-                # Find the news item in the pool
-                fetched_item = next(
-                    (n for n in news_pool if n.get("id") == fetched_id), None
+                fetch_edges.append(
+                    {
+                        "source": parent_ids[0],
+                        "target": fetch_node_id,
+                        "relationship": "fetched_for",
+                    }
                 )
-                if fetched_item:
-                    fetch_node_id = f"fetch-{uuid4().hex[:8]}"
-                    new_nodes.append(
-                        {
-                            "id": fetch_node_id,
-                            "layer": layer,
-                            "type": "fetch",
-                            "content": f"Related: {fetched_item.get('title', fetched_item.get('summary', ''))}",
-                            "reasoning": "Agent fetched this related news for additional context",
-                            "sources": [fetched_item.get("url", "")],
-                            "parents": [parent_ids[0]],
-                            "selected": True,
-                            "metadata": fetched_item,
-                        }
-                    )
-                    new_edges.append(
-                        {
-                            "source": parent_ids[0],
-                            "target": fetch_node_id,
-                            "relationship": "fetched_for",
-                        }
-                    )
-                    existing_ids.add(fetched_id)
+                existing_ids.add(fetched_id)
 
-        log.info(
-            "Think layer %d: %d effects, %d edges from %d parents",
-            layer,
-            len(new_nodes),
-            len(new_edges),
-            len(parent_nodes),
-        )
-        return new_nodes, new_edges
-
-    except Exception as e:
-        log.error("Think effects failed at layer %d: %s", layer, e)
-        return [], []
+    log.info(
+        "Thinker layer %d: %d effects, %d fetches from %d parents",
+        layer,
+        len(effect_nodes),
+        len(fetch_nodes),
+        len(parent_nodes),
+    )
+    return effect_nodes, fetch_nodes, effect_edges, fetch_edges
 
 
-def match_opportunities(
-    final_effects: list[dict], value_pool: list[dict]
+def run_matcher(
+    effects: list[dict],
+    value_pool: list[dict],
 ) -> tuple[list[dict], list[dict]]:
-    """Use main LLM to match effects against value stocks.
+    """Match effects against value stocks to find opportunities.
 
-    Args:
-        final_effects: Selected effect nodes from the final thinking layer.
-        value_pool: Value stocks to match against.
+    Opportunities placed at same layer as parent effect.
+    No ticker dedup — different causal paths are distinct opportunities.
 
     Returns:
-        (opportunity_nodes, edges) matching ThinkingNode/ThinkingEdge schema.
-        convergence_score is computed deterministically, not by LLM.
+        (opportunity_nodes, edges)
     """
-    if not final_effects or not value_pool:
+    if not effects or not value_pool:
         return [], []
 
     try:
-        system_prompt = build_system_prompt()
+        system_prompt = build_system_prompt(allowed_skills=MATCHER_SKILLS)
         matcher = Agent(
             role="Value Opportunity Matcher",
-            goal="Match market effects to undervalued stocks using your analytical skills",
+            goal="Match market effects to undervalued stocks",
             backstory=system_prompt,
             llm=get_main_llm(),
             tools=[load_skill],
@@ -289,9 +261,9 @@ def match_opportunities(
                     "id": e.get("id", ""),
                     "content": e.get("content", ""),
                     "reasoning": e.get("reasoning", ""),
-                    "metadata": e.get("metadata", {}),
+                    "confidence": e.get("confidence", 50),
                 }
-                for e in final_effects
+                for e in effects
             ],
             ensure_ascii=False,
         )
@@ -311,17 +283,18 @@ def match_opportunities(
 
         match_task = Task(
             description=(
-                f"Match these market effects to value stocks that would benefit.\n\n"
+                f"Match these market effects to value stocks that benefit.\n\n"
                 f"Effects:\n{effects_json}\n\n"
                 f"Value stocks:\n{values_json}\n\n"
                 f"For each match:\n"
-                f"1. Identify which effect(s) benefit the stock\n"
-                f"2. Rate sentiment_score (0-100): how positive is the effect for this stock\n"
-                f"3. Rate agreement_score (0-100): how confident are you in this match\n"
-                f"4. Explain the reasoning\n\n"
-                f"Return a JSON object with:\n"
-                f"- 'matches': array of {{'ticker': str, 'effect_id': str, "
-                f"'sentiment_score': float, 'agreement_score': float, 'reasoning': str}}\n\n"
+                f"1. Which effect benefits the stock (effect_id)\n"
+                f"2. sentiment_score (0-100): how positive for this stock\n"
+                f"3. agreement_score (0-100): confidence in this match\n"
+                f"4. Reasoning\n\n"
+                f"Return JSON:\n"
+                f'{{"matches": [{{"ticker": str, "effect_id": str, '
+                f'"sentiment_score": float, "agreement_score": float, '
+                f'"reasoning": str}}]}}\n\n'
                 f"Only include high-confidence matches. Return ONLY valid JSON."
             ),
             expected_output="JSON object with 'matches' array.",
@@ -332,80 +305,195 @@ def match_opportunities(
         result = crew.kickoff()
 
         raw = result.raw if hasattr(result, "raw") else str(result)
-        if "```" in raw:
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        parsed = json.loads(raw.strip())
+        parsed = parse_json_response(raw)
+        if parsed is None:
+            log.warning("Matcher JSON parse failed")
+            return [], []
 
-        matches = parsed.get("matches", [])
-        effect_map = {e.get("id", ""): e for e in final_effects}
-        value_map = {v.get("ticker", ""): v for v in value_pool}
-
-        # Determine the opportunity layer
-        max_effect_layer = max((e.get("layer", 0) for e in final_effects), default=0)
-        opp_layer = max_effect_layer + 1
-
-        opportunity_nodes: list[dict] = []
-        new_edges: list[dict] = []
-        seen_tickers: set[str] = set()
-
-        for match in matches:
-            ticker = match.get("ticker", "")
-            effect_id = match.get("effect_id", "")
-
-            if ticker in seen_tickers:
-                continue
-            if effect_id not in effect_map:
-                continue
-
-            val = value_map.get(ticker, {})
-            if not val:
-                continue
-
-            seen_tickers.add(ticker)
-
-            # Deterministic convergence score
-            sentiment = match.get("sentiment_score", 50.0)
-            discount = val.get("discount_pct", 0)
-            agreement = match.get("agreement_score", 50.0)
-            score = convergence_score(sentiment, discount, agreement)
-
-            opp_id = f"opp-{uuid4().hex[:8]}"
-            opportunity_nodes.append(
-                {
-                    "id": opp_id,
-                    "layer": opp_layer,
-                    "type": "opportunity",
-                    "content": f"{ticker} \u2014 {score}% conviction",
-                    "reasoning": match.get("reasoning", ""),
-                    "sources": [],
-                    "parents": [effect_id],
-                    "selected": True,
-                    "metadata": {
-                        **val,
-                        "convergence_score": score,
-                        "sentiment_score": sentiment,
-                        "agreement_score": agreement,
-                    },
-                }
-            )
-            new_edges.append(
-                {
-                    "source": effect_id,
-                    "target": opp_id,
-                    "relationship": "matches",
-                }
-            )
-
-        log.info(
-            "Matched %d opportunities from %d effects x %d values",
-            len(opportunity_nodes),
-            len(final_effects),
-            len(value_pool),
-        )
-        return opportunity_nodes, new_edges
+        return _build_matcher_output(parsed.get("matches", []), effects, value_pool)
 
     except Exception as e:
-        log.error("Match opportunities failed: %s", e)
+        log.error("run_matcher failed: %s", e)
         return [], []
+
+
+def _build_matcher_output(
+    matches: list[dict],
+    effects: list[dict],
+    value_pool: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    """Construct opportunity nodes and edges from parsed matcher output."""
+    effect_map = {e.get("id", ""): e for e in effects}
+    value_map = {v.get("ticker", ""): v for v in value_pool}
+
+    opportunity_nodes: list[dict] = []
+    new_edges: list[dict] = []
+
+    for match in matches:
+        ticker = match.get("ticker", "")
+        effect_id = match.get("effect_id", "")
+
+        if effect_id not in effect_map:
+            continue
+        val = value_map.get(ticker, {})
+        if not val:
+            continue
+
+        parent_effect = effect_map[effect_id]
+        opp_layer = parent_effect.get("layer", 1)
+
+        sentiment = match.get("sentiment_score", 50.0)
+        discount = val.get("discount_pct", 0)
+        agreement = match.get("agreement_score", 50.0)
+        score = convergence_score(sentiment, discount, agreement)
+
+        opp_id = f"opp-{uuid4().hex[:8]}"
+        opportunity_nodes.append(
+            {
+                "id": opp_id,
+                "layer": opp_layer,
+                "type": "opportunity",
+                "content": f"{ticker} \u2014 {score}% conviction",
+                "reasoning": match.get("reasoning", ""),
+                "confidence": score,
+                "sources": [],
+                "parents": [effect_id],
+                "selected": True,
+                "metadata": {
+                    **val,
+                    "convergence_score": score,
+                    "sentiment_score": sentiment,
+                    "agreement_score": agreement,
+                },
+            }
+        )
+        new_edges.append(
+            {"source": effect_id, "target": opp_id, "relationship": "matches"}
+        )
+
+    log.info(
+        "Matcher: %d opportunities from %d effects x %d values",
+        len(opportunity_nodes),
+        len(effects),
+        len(value_pool),
+    )
+    return opportunity_nodes, new_edges
+
+
+def run_controller(
+    chain_summary: str,
+    effects: list[dict],
+    matches: list[dict],
+    layer: int,
+    max_depth: int,
+    confidence_threshold: float = CONFIDENCE_THRESHOLD,
+) -> dict:
+    """Evaluate reasoning quality and decide whether to continue.
+
+    Returns:
+        {"continue": bool, "reasoning": str, "summary": str}
+    """
+    # Deterministic stops — no LLM needed
+    if not effects:
+        return {
+            "continue": False,
+            "reasoning": "No effects produced by thinker — nothing to explore.",
+            "summary": chain_summary,
+        }
+
+    avg_conf = sum(e.get("confidence", 0) for e in effects) / len(effects)
+
+    if layer >= max_depth:
+        return {
+            "continue": False,
+            "reasoning": f"Reached max depth ({max_depth}). Stopping.",
+            "summary": chain_summary,
+        }
+
+    if avg_conf < confidence_threshold:
+        return {
+            "continue": False,
+            "reasoning": (
+                f"Average confidence too low ({avg_conf:.0f} < "
+                f"{confidence_threshold}). Further reasoning would be speculative."
+            ),
+            "summary": chain_summary,
+        }
+
+    # LLM-based decision
+    try:
+        controller = Agent(
+            role="Thinking Chain Evaluator",
+            goal="Decide whether deeper causal reasoning is productive",
+            backstory=(
+                "You evaluate the quality and novelty of a multi-layer "
+                "causal reasoning chain. Your job is to decide if exploring "
+                "one layer deeper would yield valuable insights or if the "
+                "chain has reached diminishing returns."
+            ),
+            llm=get_main_llm(),
+            verbose=False,
+        )
+
+        effects_json = json.dumps(
+            [
+                {"content": e.get("content", ""), "confidence": e.get("confidence", 0)}
+                for e in effects
+            ],
+            ensure_ascii=False,
+        )
+
+        match_count = len(matches)
+        avg_score = (
+            sum(m.get("convergence_score", 0) for m in matches) / match_count
+            if match_count
+            else 0
+        )
+
+        ctrl_task = Task(
+            description=(
+                f"Evaluate this thinking chain and decide: continue or stop?\n\n"
+                f"Chain summary:\n{chain_summary}\n\n"
+                f"This layer's effects ({len(effects)}):\n{effects_json}\n\n"
+                f"Average confidence: {avg_conf:.0f}\n"
+                f"Matches found: {match_count}"
+                f"{f' (avg score: {avg_score:.0f})' if match_count else ''}\n"
+                f"Current layer: {layer} / {max_depth}\n\n"
+                f"Decide:\n"
+                f"- continue=true if unexplored causal paths remain\n"
+                f"- continue=false if chains are speculative or exhausted\n\n"
+                f"Return JSON:\n"
+                f'{{"continue": bool, "reasoning": str, "summary": str}}\n\n'
+                f"The summary should narrate the full chain so far. "
+                f"Return ONLY valid JSON."
+            ),
+            expected_output="JSON with continue, reasoning, summary.",
+            agent=controller,
+        )
+
+        crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=False)
+        result = crew.kickoff()
+
+        raw = result.raw if hasattr(result, "raw") else str(result)
+        parsed = parse_json_response(raw)
+        if parsed is None:
+            log.warning("Controller JSON parse failed at layer %d", layer)
+            return {
+                "continue": False,
+                "reasoning": "Error: failed to parse controller response.",
+                "summary": chain_summary,
+            }
+
+        return {
+            "continue": bool(parsed.get("continue", False)),
+            "reasoning": parsed.get("reasoning", ""),
+            "summary": parsed.get("summary", chain_summary),
+        }
+
+    except Exception as e:
+        log.error("run_controller failed at layer %d: %s", layer, e)
+        return {
+            "continue": False,
+            "reasoning": f"Error in controller: {e}",
+            "summary": chain_summary,
+        }

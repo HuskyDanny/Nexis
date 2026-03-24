@@ -1,0 +1,1 @@
+Code verified: App.tsx line 141 setLoading(false) in .finally() after getLivePools resolves. Line 323 shows pool selection UI only when !loading && phase==="pools". Pool API confirmed working (4ms cache hit). No browser automation available for visual screenshot.

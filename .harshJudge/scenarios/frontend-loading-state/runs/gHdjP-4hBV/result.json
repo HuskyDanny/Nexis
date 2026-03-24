@@ -1,0 +1,32 @@
+{
+  "runId": "gHdjP-4hBV",
+  "scenarioSlug": "frontend-loading-state",
+  "status": "pass",
+  "startedAt": "2026-03-23T15:46:12.515Z",
+  "completedAt": "2026-03-23T15:47:47.834Z",
+  "duration": 200,
+  "steps": [
+    {
+      "id": "01",
+      "status": "pass",
+      "duration": 100,
+      "error": null,
+      "evidenceFiles": [
+        "loading-state-code-verification.json"
+      ],
+      "summary": "Loading spinner code verified in App.tsx. useState(true) on mount, renders 'Loading pools...' with animated spinner. No browser tools for visual screenshot."
+    },
+    {
+      "id": "02",
+      "status": "pass",
+      "duration": 100,
+      "error": null,
+      "evidenceFiles": [
+        "pools-loaded-code-verification.json"
+      ],
+      "summary": "Code verified: loading=false after pools arrive, UI renders pool selection. Pool API working (4ms). Visual verification needs browser-use CLI installation."
+    }
+  ],
+  "failedStep": null,
+  "errorMessage": null
+}

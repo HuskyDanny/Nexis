@@ -1,202 +1,203 @@
-"""Thinking service — orchestrates agent reasoning or falls back to mock.
+"""Thinking service — pipeline orchestrator.
 
-This is the integration layer between the API and the agent crews.
-When SILICONFLOW_API_KEY is set, uses real CrewAI agents.
-When not set, uses deterministic mock for development/testing.
+Orchestrates the three-agent thinking pipeline:
+- run_layer()    — one layer: Thinker -> Matcher -> Controller
+- run_pipeline() — full loop until Controller stops or max_depth
+
+No mock fallback. If LLM is down, pipeline returns empty/partial results.
 """
 
-import random
-from uuid import uuid4
+import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
+from src.agents.thinking_crew import run_controller, run_matcher, run_thinker
 from src.core.logger import get_logger
 
 log = get_logger("thinking.service")
 
-
-def _use_real_agents() -> bool:
-    """Check if real agents are available."""
-    try:
-        from src.agents.llm_config import is_llm_available
-
-        return is_llm_available()
-    except ImportError:
-        return False
+AGENT_TIMEOUT_S = 60
+AGENT_RETRIES = 1
+DEFAULT_STOP_LAYER = 3
 
 
-def _mock_think_effects(
-    parent_nodes: list[dict],
-    news_pool: list[dict],
-    current_layer_nodes: list[dict],
-    next_layer: int,
-    existing_ids: set[str],
-) -> tuple[list[dict], list[dict]]:
-    """Mock reasoning — deterministic sector-based effects."""
-    new_nodes = []
-    new_edges = []
+@dataclass
+class LayerResult:
+    """Result of a single pipeline layer."""
 
-    # Group by sector for compound effects
-    sector_nodes: dict[str, list[dict]] = {}
-    for parent in current_layer_nodes:
-        sectors = parent.get("metadata", {}).get("sectors", [])
-        sector = parent.get("metadata", {}).get("sector", "")
-        if sectors:
-            for s in sectors:
-                sector_nodes.setdefault(s, []).append(parent)
-        elif sector:
-            sector_nodes.setdefault(sector, []).append(parent)
-        else:
-            sector_nodes.setdefault("general", []).append(parent)
-
-    created: set[str] = set()
-    for sector, parents in sector_nodes.items():
-        if sector in created:
-            continue
-        created.add(sector)
-
-        eid = uuid4().hex[:12]
-        pids = [p["id"] for p in parents]
-        pcontents = [p["content"][:30] for p in parents]
-
-        new_nodes.append(
-            {
-                "id": eid,
-                "layer": next_layer,
-                "type": "effect",
-                "content": f"Impact on {sector}: {' + '.join(pcontents)}",
-                "reasoning": f"Compound effect from {len(parents)} sources on {sector} sector",
-                "sources": [s for p in parents for s in p.get("sources", [])],
-                "parents": pids,
-                "selected": True,
-                "metadata": {"sector": sector, "parent_count": len(parents)},
-            }
-        )
-        for pid in pids:
-            new_edges.append(
-                {
-                    "source": pid,
-                    "target": eid,
-                    "relationship": "causes" if next_layer == 1 else "compounds",
-                }
-            )
-
-    # Fetch a related news item
-    available = [n for n in news_pool if n["id"] not in existing_ids]
-    if available and current_layer_nodes:
-        fetched = random.choice(available)
-        fid = f"fetch-{uuid4().hex[:8]}"
-        new_nodes.append(
-            {
-                "id": fid,
-                "layer": next_layer,
-                "type": "fetch",
-                "content": f"Related: {fetched.get('title', fetched.get('summary', ''))}",
-                "reasoning": "Agent fetched this related news for additional context",
-                "sources": [fetched.get("url", "")],
-                "parents": [current_layer_nodes[0]["id"]],
-                "selected": True,
-                "metadata": fetched,
-            }
-        )
-        new_edges.append(
-            {
-                "source": current_layer_nodes[0]["id"],
-                "target": fid,
-                "relationship": "fetched_for",
-            }
-        )
-
-    return new_nodes, new_edges
-
-
-def _mock_match(
-    final_effects: list[dict],
-    value_pool: list[dict],
-    opp_layer: int,
-) -> tuple[list[dict], list[dict]]:
-    """Mock matching — sector string matching with deterministic scoring."""
-    opportunities = []
-    new_edges = []
-
-    def _score(sentiment: float, discount: float, agreement: float) -> float:
-        return round(min(100.0, sentiment * 0.3 + discount * 0.3 + agreement * 0.4), 1)
-
-    for val in value_pool:
-        for effect in final_effects:
-            text = (
-                effect.get("content", "") + " " + effect.get("reasoning", "")
-            ).lower()
-            sector = val.get("sector", "").lower()
-            if sector and sector in text:
-                score = _score(70.0, val.get("discount_pct", 0), 75.0)
-                if score >= 50:
-                    oid = f"opp-{uuid4().hex[:8]}"
-                    opportunities.append(
-                        {
-                            "id": oid,
-                            "layer": opp_layer,
-                            "type": "opportunity",
-                            "content": f"{val.get('ticker', '?')} — {score}% conviction",
-                            "reasoning": f"Matched via {sector} sector. Effect: {effect['content'][:50]}",
-                            "sources": [],
-                            "parents": [effect["id"]],
-                            "selected": True,
-                            "metadata": {**val, "convergence_score": score},
-                        }
-                    )
-                    new_edges.append(
-                        {
-                            "source": effect["id"],
-                            "target": oid,
-                            "relationship": "matches",
-                        }
-                    )
-                    break
-    return opportunities, new_edges
-
-
-async def think_effects(
-    parent_nodes: list[dict],
-    news_pool: list[dict],
-    current_layer_nodes: list[dict],
-    next_layer: int,
-    existing_ids: set[str],
-) -> tuple[list[dict], list[dict]]:
-    """Produce effect nodes from parent context. Uses real agents if available."""
-    if _use_real_agents():
-        try:
-            from src.agents.thinking_crew import think_effects as real_think
-
-            log.info("Using real CrewAI agents for layer %d", next_layer)
-            nodes, edges = real_think(current_layer_nodes, news_pool, next_layer)
-            if nodes:  # Only use if agents produced results
-                return nodes, edges
-            log.warning("Real agents produced 0 nodes, falling back to mock")
-        except Exception as e:
-            log.error("Real agent failed, falling back to mock: %s", e)
-
-    log.info("Using mock reasoning for layer %d", next_layer)
-    return _mock_think_effects(
-        parent_nodes, news_pool, current_layer_nodes, next_layer, existing_ids
+    effect_nodes: list[dict] = field(default_factory=list)
+    fetch_nodes: list[dict] = field(default_factory=list)
+    opportunity_nodes: list[dict] = field(default_factory=list)
+    all_edges: list[dict] = field(default_factory=list)
+    controller_decision: dict = field(
+        default_factory=lambda: {"continue": False, "reasoning": "", "summary": ""}
     )
 
 
-async def match_opportunities(
-    final_effects: list[dict],
-    value_pool: list[dict],
-    opp_layer: int,
-) -> tuple[list[dict], list[dict]]:
-    """Match effects against value pool. Uses real agents if available."""
-    if _use_real_agents():
+def _empty_layer_result(reason: str) -> LayerResult:
+    """Return an empty LayerResult that signals stop."""
+    return LayerResult(
+        controller_decision={
+            "continue": False,
+            "reasoning": reason,
+            "summary": "",
+        }
+    )
+
+
+async def _call_with_retry(func, *args, **kwargs):
+    """Call a sync function in an executor with timeout and 1 retry."""
+    loop = asyncio.get_running_loop()
+    last_err = None
+    for attempt in range(1 + AGENT_RETRIES):
         try:
-            from src.agents.thinking_crew import match_opportunities as real_match
-
-            log.info("Using real CrewAI agents for matching")
-            opps, edges = real_match(final_effects, value_pool)
-            if opps:
-                return opps, edges
-            log.warning("Real agent matching produced 0 results, falling back to mock")
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: func(*args, **kwargs)),
+                timeout=AGENT_TIMEOUT_S,
+            )
+            return result
         except Exception as e:
-            log.error("Real agent matching failed, falling back to mock: %s", e)
+            last_err = e
+            if attempt < AGENT_RETRIES:
+                log.warning(
+                    "Agent call failed (attempt %d), retrying: %s", attempt + 1, e
+                )
+    raise last_err  # type: ignore[misc]
 
-    log.info("Using mock matching")
-    return _mock_match(final_effects, value_pool, opp_layer)
+
+async def run_layer(
+    chain_summary: str,
+    parent_nodes: list[dict],
+    news_pool: list[dict],
+    value_pool: list[dict],
+    layer: int,
+    max_depth: int,
+    confidence_threshold: float = 35,
+) -> LayerResult:
+    """Run one layer of the pipeline: Thinker -> Matcher -> Controller.
+
+    - Thinker fails -> empty LayerResult with continue=False
+    - Matcher fails -> no matches this layer, continue
+    - Controller fails -> default: continue if layer < 3, stop if >= 3
+    """
+    # --- Thinker ---
+    try:
+        effect_nodes, fetch_nodes, effect_edges, fetch_edges = await _call_with_retry(
+            run_thinker,
+            parent_nodes=parent_nodes,
+            chain_summary=chain_summary,
+            news_pool=news_pool,
+            layer=layer,
+        )
+    except Exception as e:
+        log.error("Thinker failed at layer %d: %s", layer, e)
+        return _empty_layer_result(f"Thinker failed: {e}")
+
+    if not effect_nodes:
+        log.info("Thinker produced no effects at layer %d", layer)
+        return _empty_layer_result("Thinker produced no effects")
+
+    all_edges = list(effect_edges) + list(fetch_edges)
+
+    # --- Matcher ---
+    opportunity_nodes: list[dict] = []
+    try:
+        opportunity_nodes, match_edges = await _call_with_retry(
+            run_matcher,
+            effects=effect_nodes,
+            value_pool=value_pool,
+        )
+        all_edges.extend(match_edges)
+    except Exception as e:
+        log.warning(
+            "Matcher failed at layer %d, continuing without matches: %s", layer, e
+        )
+
+    # --- Controller ---
+    try:
+        ctrl = await _call_with_retry(
+            run_controller,
+            chain_summary=chain_summary,
+            effects=effect_nodes,
+            matches=opportunity_nodes,
+            layer=layer,
+            max_depth=max_depth,
+            confidence_threshold=confidence_threshold,
+        )
+    except Exception as e:
+        log.warning("Controller failed at layer %d, using default logic: %s", layer, e)
+        should_continue = layer < DEFAULT_STOP_LAYER
+        ctrl = {
+            "continue": should_continue,
+            "reasoning": f"Controller failed, default: {'continue' if should_continue else 'stop'}",
+            "summary": chain_summary,
+        }
+
+    return LayerResult(
+        effect_nodes=effect_nodes,
+        fetch_nodes=fetch_nodes,
+        opportunity_nodes=opportunity_nodes,
+        all_edges=all_edges,
+        controller_decision=ctrl,
+    )
+
+
+async def run_pipeline(
+    session_id: str,
+    seeds: list[dict],
+    news_pool: list[dict],
+    value_pool: list[dict],
+    max_depth: int,
+    on_layer_complete: Callable,
+) -> None:
+    """Run the full thinking pipeline loop.
+
+    Iterates layers starting from 1. Each layer:
+    1. Collects all selected nodes from prior layers as parent_nodes
+    2. Calls run_layer()
+    3. Persists via on_layer_complete callback
+    4. Stops on: controller stop, max_depth reached, or empty effects
+    """
+    chain_summary = ""
+    all_layer_nodes: list[list[dict]] = [seeds]  # layer 0 = seeds
+
+    for layer in range(1, max_depth + 1):
+        # Parent nodes: all selected nodes from prior layers
+        parent_nodes = []
+        for layer_nodes in all_layer_nodes:
+            parent_nodes.extend(n for n in layer_nodes if n.get("selected", False))
+
+        result = await run_layer(
+            chain_summary=chain_summary,
+            parent_nodes=parent_nodes,
+            news_pool=news_pool,
+            value_pool=value_pool,
+            layer=layer,
+            max_depth=max_depth,
+        )
+
+        await on_layer_complete(layer, result)
+
+        # Accumulate this layer's nodes for future parent collection
+        this_layer_nodes = (
+            result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
+        )
+        all_layer_nodes.append(this_layer_nodes)
+
+        # Update chain summary from controller
+        chain_summary = result.controller_decision.get("summary", chain_summary)
+
+        # Termination: controller says stop or no effects produced
+        if not result.controller_decision.get("continue", False):
+            log.info(
+                "Pipeline stopping at layer %d: %s",
+                layer,
+                result.controller_decision.get("reasoning", "unknown"),
+            )
+            break
+
+    log.info(
+        "Pipeline complete for session %s (%d layers)",
+        session_id,
+        len(all_layer_nodes) - 1,
+    )

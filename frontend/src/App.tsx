@@ -118,10 +118,12 @@ function App() {
   const [thinkingSessionId, setThinkingSessionId] = useState<string | null>(
     null,
   );
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const date = todayDate();
     log.info("Loading live pools for", date);
+    setLoading(true);
     graphApi
       .getLivePools(date)
       .then((res) => {
@@ -135,7 +137,8 @@ function App() {
           "values",
         );
       })
-      .catch((err) => log.error("Failed to load pools:", err));
+      .catch((err) => log.error("Failed to load pools:", err))
+      .finally(() => setLoading(false));
   }, []);
 
   const toggleNews = useCallback((id: string) => {
@@ -301,7 +304,23 @@ function App() {
           <ThinkingView sessionId={thinkingSessionId} onReset={reset} />
         ) : (
           <div className="flex-1 relative">
-            {phase === "pools" && (
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                <div className="flex flex-col items-center gap-4">
+                  <div
+                    className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+                    style={{
+                      borderColor: "rgba(34,197,94,0.6)",
+                      borderTopColor: "transparent",
+                    }}
+                  />
+                  <p className="text-text-muted text-xs tracking-widest uppercase">
+                    Loading pools…
+                  </p>
+                </div>
+              </div>
+            )}
+            {!loading && phase === "pools" && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 <div className="flex flex-col items-center gap-6 pointer-events-auto">
                   <AgentFace size={64} />
