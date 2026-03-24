@@ -6,20 +6,22 @@ from src.pipelines.news.fetch import AlphaVantageNewsFetch
 
 
 # --- NewsDecayScore ---
-def _entity(age_days=0, sources=1, tickers=1):
+def _entity(age_days=0, sources=1, tickers=1, scope=2, story_cluster_size=1):
     dt = (datetime.now(timezone.utc) - timedelta(days=age_days)).isoformat()
     return {
         "first_seen_at": dt,
         "last_seen_at": dt,
         "sources": [f"s{i}" for i in range(sources)],
         "tickers": [f"T{i}" for i in range(tickers)],
+        "scope": scope,
+        "story_cluster_size": story_cluster_size,
     }
 
 
 def test_fresh_news_high_score():
-    # With sources=1, tickers=1: raw = 0.5*1.0 + 0.3*0.4 + 0.2*0.3 = 0.68 → score=68.0
+    # With sources=1, scope=2, cluster=1: raw = 0.4*1.0 + 0.25*0.4 + 0.2*0.4 + 0.15*0.05 = 0.5875 → score=58.8
     r = NewsDecayScore(half_life_days=3.0).score(_entity(age_days=0))
-    assert r.score >= 60 and r.factors["freshness"] >= 0.9
+    assert r.score >= 50 and r.factors["freshness"] >= 0.9
 
 
 def test_old_news_low_score():
@@ -39,7 +41,33 @@ def test_multi_source_boost():
 
 def test_no_tickers():
     r = NewsDecayScore(half_life_days=3.0).score(_entity(tickers=0))
-    assert r.factors.get("ticker_relevance", 0) == 0.0
+    assert "ticker_relevance" not in r.factors
+    assert "scope_factor" in r.factors
+
+
+def test_macro_news_scores_higher_than_company_news():
+    """Macro news (scope=5, cluster=25) should outscore company news (scope=1, cluster=1)."""
+    scorer = NewsDecayScore()
+    macro = _entity(age_days=1, sources=3, scope=5, story_cluster_size=25)
+    company = _entity(age_days=1, sources=2, scope=1, story_cluster_size=1)
+    company["tickers"] = ["AAPL"]
+    assert scorer.score(macro).score > scorer.score(company).score
+
+
+def test_scope_factor_in_score_factors():
+    scorer = NewsDecayScore()
+    e = _entity(age_days=0, sources=1, scope=4)
+    result = scorer.score(e)
+    assert "scope_factor" in result.factors
+    assert "cluster_factor" in result.factors
+    assert "ticker_relevance" not in result.factors
+
+
+def test_cluster_factor_maxes_at_20():
+    scorer = NewsDecayScore()
+    e = _entity(age_days=0, sources=1, scope=3, story_cluster_size=50)
+    result = scorer.score(e)
+    assert result.factors["cluster_factor"] == 1.0
 
 
 # --- HybridSimilarityProcess ---
