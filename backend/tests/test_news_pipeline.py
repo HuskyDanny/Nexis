@@ -2,7 +2,6 @@ from datetime import datetime, timezone, timedelta
 import pytest
 from src.pipelines.news.score import NewsDecayScore
 from src.pipelines.news.process import HybridSimilarityProcess
-from src.pipelines.news.fetch import AlphaVantageNewsFetch
 
 
 # --- NewsDecayScore ---
@@ -144,8 +143,12 @@ async def test_merge_shared_entities():
     assert r.action == "merge" and r.entity_id == "e_fed"
 
 
-# --- AlphaVantageNewsFetch ---
-@pytest.mark.asyncio
-async def test_fetch_placeholder_empty():
-    r = await AlphaVantageNewsFetch().fetch(market="US")
-    assert isinstance(r, list) and len(r) == 0
+# --- Market-free ID generation ---
+def test_gen_id_no_market():
+    """ID generation should not include market."""
+    proc = HybridSimilarityProcess()
+    raw = {"title": "Test headline", "date": "2026-03-24"}
+    id1 = proc._gen_id(raw)
+    raw_with_market = {"title": "Test headline", "date": "2026-03-24", "market": "CN"}
+    id2 = proc._gen_id(raw_with_market)
+    assert id1 == id2  # Market should not affect ID
