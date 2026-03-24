@@ -8,8 +8,8 @@ def test_story_to_pool_item_basic():
         "summary": "Beijing announced...",
         "numArticles": 42,
         "initialPublishedAt": "2026-03-24T08:00:00Z",
-        "topics": [{"name": "Trade"}],
-        "categories": [{"name": "World"}],
+        "topics": [{"name": "Sanctions"}],
+        "categories": [{"name": "Geopolitical"}],
         "sentiment": {"positive": 0.1, "negative": 0.8},
     }
     item = _story_to_pool_item(story)

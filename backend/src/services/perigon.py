@@ -66,42 +66,53 @@ async def _set_cache(cache_key: str, articles: list[dict]):
     )
 
 
+def _name_matches_keyword(names: list[str], keywords: set[str]) -> bool:
+    """Check if any keyword matches a name as a whole word (not substring).
+
+    Each name is checked individually against each keyword using word-boundary
+    matching to avoid false positives like "war" matching "software".
+    """
+    for name in names:
+        lower = f" {name} "  # Pad for word-boundary matching
+        for k in keywords:
+            if f" {k} " in lower:
+                return True
+    return False
+
+
 def _classify_scope(article: dict) -> int:
     """Derive scope score (1-5) from Perigon's pre-classified metadata."""
     topics = [t.get("name", "").lower() for t in article.get("topics", [])]
     categories = [c.get("name", "").lower() for c in article.get("categories", [])]
     labels = [l.get("name", "").lower() for l in article.get("labels", [])]
+    all_names = topics + categories
     companies = article.get("companies", [])
-    locations = article.get("locations", [])
 
     # Low content = noise
     if "low content" in labels or "opinion" in labels:
         return 1
 
     # Company-specific (SEC filings, earnings, single company)
-    if len(companies) == 1 and not any(
-        t in topics
-        for t in ["markets", "economy", "federal reserve", "trade", "geopolitical"]
-    ):
+    company_override_topics = {"markets", "economy", "federal reserve", "trade", "geopolitical"}
+    if len(companies) == 1 and not any(t in company_override_topics for t in topics):
         return 1
 
-    # Global/geopolitical
+    # Global/geopolitical — require specific geo entities/events
     geo_keywords = {
         "geopolitical",
         "federal reserve",
         "trade war",
-        "trade",
         "sanctions",
-        "war",
         "opec",
         "g7",
         "g20",
         "nato",
         "imf",
         "world bank",
-        "world",
+        "armed conflict",
+        "military conflict",
     }
-    if any(k in " ".join(topics + categories).lower() for k in geo_keywords):
+    if _name_matches_keyword(all_names, geo_keywords):
         return 5
 
     # National/macro
@@ -115,7 +126,7 @@ def _classify_scope(article: dict) -> int:
         "fiscal policy",
         "treasury",
     }
-    if any(k in " ".join(topics + categories).lower() for k in macro_keywords):
+    if _name_matches_keyword(all_names, macro_keywords):
         return 4
 
     # Industry/trend
@@ -127,7 +138,7 @@ def _classify_scope(article: dict) -> int:
         "real estate",
         "markets",
     }
-    if any(k in " ".join(topics + categories).lower() for k in industry_keywords):
+    if _name_matches_keyword(all_names, industry_keywords):
         return 3
 
     # Sector
