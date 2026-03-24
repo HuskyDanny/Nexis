@@ -159,6 +159,26 @@ class TestCheckDirection:
         result = check_direction("long USO position", "short USO position recommended")
         assert result is False
 
+    def test_multi_directional_returns_none(self):
+        # Both "increase" and "decrease" present → ambiguous, defer to LLM
+        assert (
+            check_direction(
+                "inflation increase from oil costs",
+                "inflation increase pushes costs up while rates decrease",
+            )
+            is None
+        )
+
+    def test_negated_direction_returns_none(self):
+        # "not" stripped as stopword → both "increase" and "decrease" present
+        assert (
+            check_direction(
+                "oil price increase",
+                "oil prices decrease, not increase in this scenario",
+            )
+            is None
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestCheckCheckpointKeyword

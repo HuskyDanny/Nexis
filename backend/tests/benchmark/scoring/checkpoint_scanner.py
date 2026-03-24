@@ -92,6 +92,8 @@ def extract_key_terms(concept: str) -> list[str]:
     # Replace slash and em-dash with space so alternatives become separate tokens
     text = text.replace("/", " ").replace("—", " ")
     tokens = text.split()
+    # Strip trailing/leading punctuation from each token
+    tokens = [t.strip(".,;:!?\"'()[]{}") for t in tokens]
     return [t for t in tokens if len(t) > 1 and t not in _STOPWORDS]
 
 
@@ -120,12 +122,13 @@ def check_direction(concept: str, node_text: str) -> bool | None:
     for cdir in concept_dirs:
         antonym = _ANTONYMS.get(cdir)
         if antonym and antonym in node_terms:
-            # Antonym found — but if the concept's own direction word also
-            # appears in the node, the text discusses both directions (e.g.,
-            # "inflation increase... cannot decrease rates").  That is not a
-            # contradiction; the node covers multiple directional statements.
+            # Antonym found — if the concept's own direction word also appears,
+            # the text discusses both directions (e.g., "inflation increase...
+            # cannot decrease rates").  Return None (indeterminate) to defer to
+            # the LLM fallback, since bag-of-words can't distinguish "X increases
+            # while Y decreases" from "X does not increase" (negation stripped).
             if cdir in node_terms:
-                continue  # both directions present — not contradictory
+                return None  # both directions — ambiguous, defer to LLM
             return False
 
     # No contradiction found — direction is consistent (or absent in node, which is fine)

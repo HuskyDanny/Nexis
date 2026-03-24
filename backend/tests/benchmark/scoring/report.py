@@ -53,11 +53,16 @@ def compute_overall(
     reasoning_completeness: float,
     match_quality: float,
     depth_appropriateness: float,
+    pass2_ran: bool = True,
 ) -> tuple[float, str]:
     """Return (weighted_score, grade) from individual dimension scores.
 
-    When Pass 2 dimensions are all 0 (not run), the score is re-weighted
-    to use only Pass 1 dimensions so the grade reflects actual coverage.
+    Args:
+        pass2_ran: Explicit flag indicating whether Pass 2 (LLM judge) was
+            executed. When False, the grade is suffixed with ``*`` to signal
+            incomplete evaluation. The numeric score still uses full weights
+            so Pass 1-only runs (max ~0.45) naturally land at D, honestly
+            reflecting that 55% of evaluation was skipped.
     """
     dimensions = {
         "checkpoint_hit_rate": checkpoint_hit_rate,
@@ -69,26 +74,13 @@ def compute_overall(
         "depth_appropriateness": depth_appropriateness,
     }
 
-    # Check if Pass 2 was actually run (any non-zero LLM judge dimension)
-    pass2_keys = {
-        "reasoning_correctness",
-        "reasoning_completeness",
-        "match_quality",
-        "depth_appropriateness",
-    }
-    pass2_ran = any(dimensions[k] > 0 for k in pass2_keys)
-
     score = sum(WEIGHTS[k] * dimensions[k] for k in dimensions)
+    grade = _grade(round(score, 10))
 
     if not pass2_ran:
-        # Cap grade at C when Pass 2 is absent — surface-level checks alone
-        # cannot earn above C regardless of how perfect they are.
-        grade = _grade(score)
-        if grade in ("A", "B"):
-            grade = "C*"  # asterisk signals incomplete evaluation
-        return round(score, 10), grade
+        grade = f"{grade}*"  # asterisk signals incomplete evaluation
 
-    return round(score, 10), _grade(round(score, 10))
+    return round(score, 10), grade
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +108,7 @@ def build_report(
         reasoning_completeness=dim_by_name.get("Reasoning Completeness", 0.0),
         match_quality=dim_by_name.get("Match Quality", 0.0),
         depth_appropriateness=dim_by_name.get("Depth Appropriateness", 0.0),
+        pass2_ran=len(pass2.dimensions) > 0,
     )
 
     return BenchmarkReport(
