@@ -26,6 +26,43 @@ def convergence_score(sentiment: float, discount: float, agreement: float) -> fl
     return round(min(100.0, sentiment * 0.3 + discount * 0.3 + agreement * 0.4), 1)
 
 
+# Max chars for reasoning on older parent nodes (>1 layer behind current).
+_REASONING_TRUNCATE_LIMIT = 200
+
+
+def prepare_parent_nodes(parent_nodes: list[dict], current_layer: int) -> list[dict]:
+    """Prepare parent nodes for the Thinker prompt, truncating old reasoning.
+
+    Nodes from the immediately preceding layer keep full reasoning.
+    Older nodes get reasoning truncated to ``_REASONING_TRUNCATE_LIMIT`` chars
+    to prevent context window overflow at deeper layers.
+    """
+    prepared = []
+    for n in parent_nodes:
+        node_layer = n.get("layer")
+        reasoning = n.get("reasoning", "")
+
+        # Truncate reasoning for nodes >1 layer behind current layer.
+        # Nodes without a 'layer' field are kept full (safe fallback).
+        if (
+            node_layer is not None
+            and current_layer - node_layer > 1
+            and len(reasoning) > _REASONING_TRUNCATE_LIMIT
+        ):
+            reasoning = reasoning[:_REASONING_TRUNCATE_LIMIT] + "…"
+
+        prepared.append(
+            {
+                "id": n.get("id", ""),
+                "content": n.get("content", ""),
+                "reasoning": reasoning,
+                "confidence": n.get("confidence", 50),
+                "metadata": n.get("metadata", {}),
+            }
+        )
+    return prepared
+
+
 def parse_json_response(raw: str) -> dict | None:
     """Extract and parse JSON from an LLM response string.
 

@@ -25,12 +25,14 @@ from src.agents.thinking_helpers import (
     THINKER_SKILLS,
     convergence_score,
     parse_json_response,
+    prepare_parent_nodes,
 )
 
 log = logging.getLogger("nexis.agents")
 
 # Re-export for backward compat and test access
 _parse_json_response = parse_json_response  # noqa: F841
+_prepare_parent_nodes = prepare_parent_nodes
 
 
 def run_thinker(
@@ -58,16 +60,7 @@ def run_thinker(
         )
 
         parents_json = json.dumps(
-            [
-                {
-                    "id": n.get("id", ""),
-                    "content": n.get("content", ""),
-                    "reasoning": n.get("reasoning", ""),
-                    "confidence": n.get("confidence", 50),
-                    "metadata": n.get("metadata", {}),
-                }
-                for n in parent_nodes
-            ],
+            _prepare_parent_nodes(parent_nodes, current_layer=layer),
             ensure_ascii=False,
         )
 
