@@ -66,9 +66,20 @@ class TestSessionInit:
         mock_pools_col = AsyncMock()
         mock_pools_col.find_one = AsyncMock(return_value=None)
 
-        mock_mongodb.get_collection = MagicMock(
-            side_effect=lambda name: mock_pools_col if name == "pools" else mock_col
-        )
+        # news_entities collection: find().to_list() must return a list (not a coroutine)
+        mock_news_col = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.to_list = AsyncMock(return_value=[])
+        mock_news_col.find.return_value = mock_cursor
+
+        def get_collection(name):
+            if name == "pools":
+                return mock_pools_col
+            if name == "news_entities":
+                return mock_news_col
+            return mock_col
+
+        mock_mongodb.get_collection = MagicMock(side_effect=get_collection)
 
         # Reimport to pick up our patched mock
         import importlib

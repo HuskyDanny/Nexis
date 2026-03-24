@@ -27,7 +27,9 @@ def test_news_entity_defaults():
     assert entity.named_entities == []
     assert entity.embedding == []
     assert entity.score_factors == {}
-    assert entity.market == "US"
+    assert entity.scope == 2
+    assert entity.origin == "perigon"
+    assert entity.story_cluster_size == 1
     assert isinstance(entity.first_seen_at, datetime)
     assert isinstance(entity.last_seen_at, datetime)
     assert entity.first_seen_at.tzinfo is not None

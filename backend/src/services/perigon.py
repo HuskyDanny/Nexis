@@ -66,40 +66,53 @@ async def _set_cache(cache_key: str, articles: list[dict]):
     )
 
 
+def _name_matches_keyword(names: list[str], keywords: set[str]) -> bool:
+    """Check if any keyword matches a name as a whole word (not substring).
+
+    Each name is checked individually against each keyword using word-boundary
+    matching to avoid false positives like "war" matching "software".
+    """
+    for name in names:
+        lower = f" {name} "  # Pad for word-boundary matching
+        for k in keywords:
+            if f" {k} " in lower:
+                return True
+    return False
+
+
 def _classify_scope(article: dict) -> int:
     """Derive scope score (1-5) from Perigon's pre-classified metadata."""
     topics = [t.get("name", "").lower() for t in article.get("topics", [])]
     categories = [c.get("name", "").lower() for c in article.get("categories", [])]
     labels = [l.get("name", "").lower() for l in article.get("labels", [])]
+    all_names = topics + categories
     companies = article.get("companies", [])
-    locations = article.get("locations", [])
 
     # Low content = noise
     if "low content" in labels or "opinion" in labels:
         return 1
 
     # Company-specific (SEC filings, earnings, single company)
-    if len(companies) == 1 and not any(
-        t in topics
-        for t in ["markets", "economy", "federal reserve", "trade", "geopolitical"]
-    ):
+    company_override_topics = {"markets", "economy", "federal reserve", "trade", "geopolitical"}
+    if len(companies) == 1 and not any(t in company_override_topics for t in topics):
         return 1
 
-    # Global/geopolitical
+    # Global/geopolitical — require specific geo entities/events
     geo_keywords = {
         "geopolitical",
         "federal reserve",
         "trade war",
         "sanctions",
-        "war",
         "opec",
         "g7",
         "g20",
         "nato",
         "imf",
         "world bank",
+        "armed conflict",
+        "military conflict",
     }
-    if any(k in " ".join(topics + categories).lower() for k in geo_keywords):
+    if _name_matches_keyword(all_names, geo_keywords):
         return 5
 
     # National/macro
@@ -113,7 +126,7 @@ def _classify_scope(article: dict) -> int:
         "fiscal policy",
         "treasury",
     }
-    if any(k in " ".join(topics + categories).lower() for k in macro_keywords):
+    if _name_matches_keyword(all_names, macro_keywords):
         return 4
 
     # Industry/trend
@@ -125,7 +138,7 @@ def _classify_scope(article: dict) -> int:
         "real estate",
         "markets",
     }
-    if any(k in " ".join(topics + categories).lower() for k in industry_keywords):
+    if _name_matches_keyword(all_names, industry_keywords):
         return 3
 
     # Sector
@@ -201,7 +214,7 @@ def _to_pool_item(article: dict) -> dict:
 
 
 async def fetch_perigon_news(
-    query: str = "economy markets geopolitical",
+    query: str = "economy markets geopolitical trade climate policy",
     size: int = 10,
     source_group: str = "top100",
 ) -> list[dict]:
@@ -259,4 +272,129 @@ async def fetch_perigon_news(
 
     except Exception as e:
         log.error("Perigon fetch failed: %s", e)
+        return []
+
+
+def _story_to_pool_item(story: dict) -> dict:
+    """Convert Perigon /stories response to pool item format."""
+    sentiment = story.get("sentiment", {})
+    pos = sentiment.get("positive", 0)
+    neg = sentiment.get("negative", 0)
+
+    if pos > neg + 0.15:
+        direction = "bullish"
+    elif neg > pos + 0.15:
+        direction = "bearish"
+    else:
+        direction = "neutral"
+
+    scope = _classify_scope(story)
+    impact = _classify_impact(story)
+
+    topics = [t.get("name", "") for t in story.get("topics", [])]
+    categories = [c.get("name", "") for c in story.get("categories", [])]
+    num_articles = story.get("numArticles", story.get("articles_count", 0))
+
+    return {
+        "id": f"pg-story-{story.get('storyId', '')[:10]}",
+        "type": "news_event",
+        "origin": "perigon",
+        "title": story.get("title", ""),
+        "source": "perigon-stories",
+        "url": story.get("url", ""),
+        "summary": story.get("summary", "")[:200],
+        "published_at": story.get("initialPublishedAt", story.get("updatedAt", "")),
+        "direction": direction,
+        "confidence": round(max(pos, neg) * 100),
+        "sectors": (topics + categories)[:5],
+        "sentiment_score": round(pos - neg, 3),
+        "scope": scope,
+        "impact": impact,
+        "scope_impact": scope * impact,
+        "story_cluster_size": num_articles,
+        "metadata": {
+            "sentiment": sentiment,
+            "topics": topics,
+            "categories": categories,
+        },
+    }
+
+
+async def fetch_perigon_stories(
+    categories: list[str] | None = None,
+    size: int = 10,
+    source_group: str = "top100",
+) -> list[dict]:
+    """Fetch clustered stories from Perigon /v1/stories endpoint.
+
+    Stories represent clusters of articles about the same event.
+    High numArticles = broad coverage = likely high-impact macro event.
+    Returns pool items sorted by cluster size descending.
+    """
+    if not PERIGON_API_KEY:
+        log.warning("PERIGON_API_KEY not set")
+        return []
+
+    if categories is None:
+        categories = ["Politics", "World", "Environment", "Business", "Science"]
+
+    exclude_categories = ["Opinion", "Non-news", "Paid News"]
+
+    cache_key = (
+        f"perigon-stories:{','.join(sorted(categories))}:{size}:{source_group}"
+        f":{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+    )
+    cached = await _get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    calls_today = await _get_call_count_today()
+    if calls_today >= 10:
+        log.warning("Perigon daily call limit reached (%d/10)", calls_today)
+        return []
+
+    try:
+        log.info(
+            "Perigon stories API call #%d: categories=%s size=%d",
+            calls_today + 1,
+            categories,
+            size,
+        )
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{PERIGON_BASE_URL}/stories",
+                params={
+                    "apiKey": PERIGON_API_KEY,
+                    "size": size,
+                    "category": categories,
+                    "notCategory": exclude_categories,
+                    "sourceGroup": source_group,
+                    "sortBy": "updatedAt",
+                },
+            )
+            data = r.json()
+
+        await _increment_call_count()
+
+        if data.get("status") != 200:
+            log.error("Perigon stories error: %s", data.get("message", "unknown"))
+            return []
+
+        stories = data.get("results", data.get("stories", []))
+        pool_items = [_story_to_pool_item(s) for s in stories]
+
+        # Sort by cluster size descending — bigger clusters = more macro signal
+        pool_items.sort(key=lambda x: x.get("story_cluster_size", 0), reverse=True)
+
+        await _set_cache(cache_key, pool_items)
+        log.info(
+            "Perigon stories: fetched %d stories, cached as %s",
+            len(pool_items),
+            cache_key,
+        )
+
+        return pool_items
+
+    except Exception as e:
+        log.error("Perigon stories fetch failed: %s", e)
         return []

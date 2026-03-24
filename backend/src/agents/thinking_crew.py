@@ -19,6 +19,7 @@ from crewai import Agent, Crew, Task
 
 from src.agents.llm_config import get_main_llm
 from src.agents.skills.base import build_system_prompt_with_skills
+from src.agents.tools.fetch_news import FetchNewsTool
 from src.agents.thinking_helpers import (
     CONFIDENCE_THRESHOLD,
     MATCHER_SKILLS,
@@ -56,6 +57,7 @@ def run_thinker(
             goal="Identify causal market effects using your analytical skills",
             backstory=system_prompt,
             llm=get_main_llm(),
+            tools=[FetchNewsTool()],
             verbose=False,
         )
 

@@ -40,6 +40,5 @@ class HybridSimilarityProcess:
 
     def _gen_id(self, raw: dict) -> str:
         title = raw.get("title", "")
-        market = raw.get("market", "US")
         date = raw.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-        return hashlib.sha256(f"{market}:{title}:{date}".encode()).hexdigest()[:16]
+        return hashlib.sha256(f"{title}:{date}".encode()).hexdigest()[:16]

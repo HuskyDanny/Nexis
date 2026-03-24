@@ -22,7 +22,7 @@ class PipelineResult(BaseModel):
 
 @runtime_checkable
 class FetchStrategy(Protocol):
-    async def fetch(self, market: str) -> list[dict]: ...
+    async def fetch(self, market: str | None = None) -> list[dict]: ...
 
 
 @runtime_checkable

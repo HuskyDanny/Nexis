@@ -14,7 +14,7 @@ from src.pipelines.base import PoolPipeline
 class TestBuildNewsPipeline:
     def _make_pipeline(self):
         mock_repo = MagicMock()
-        return build_news_pipeline(market="US", repo=mock_repo)
+        return build_news_pipeline(repo=mock_repo)
 
     def test_returns_pool_pipeline(self):
         pipeline = self._make_pipeline()
@@ -36,10 +36,10 @@ class TestBuildNewsPipeline:
         pipeline = self._make_pipeline()
         assert hasattr(pipeline.retain, "should_retain")
 
-    def test_market_is_set(self):
+    def test_market_is_none(self):
         mock_repo = MagicMock()
-        pipeline = build_news_pipeline(market="CN", repo=mock_repo)
-        assert pipeline.market == "CN"
+        pipeline = build_news_pipeline(repo=mock_repo)
+        assert pipeline.market is None
 
 
 class TestBuildValuePipeline:

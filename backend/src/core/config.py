@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     news_max_age_days: int = 7
     value_stale_threshold: int = 20
 
+    # Macro news pipeline config
+    news_macro_quota_ratio: float = 0.4
+    newsapi_api_key: str = ""
+    newsapi_daily_limit: int = 100
+    newsapi_agent_daily_cap: int = 50
+    perigon_agent_daily_cap: int = 2
+
     model_config = {"env_file": [".env.base", ".env"], "env_file_encoding": "utf-8"}
 
 

@@ -8,7 +8,12 @@ from src.database.mongodb import mongodb
 from src.database.repositories.news_entity_repo import NewsEntityRepo
 from src.database.repositories.value_entity_repo import ValueEntityRepo
 from src.pipelines.base import PoolPipeline, ThresholdRetain
-from src.pipelines.news.fetch import AlphaVantageNewsFetch
+from src.pipelines.news.fetch import (
+    CompositeFetch,
+    PerigonStoriesFetch,
+    PerigonAllFetch,
+    NewsAPIHeadlinesFetch,
+)
 from src.pipelines.news.process import HybridSimilarityProcess
 from src.pipelines.news.score import NewsDecayScore
 from src.pipelines.value.fetch import YahooFinanceFetch
@@ -20,10 +25,12 @@ log = get_logger("cron.scheduler")
 MARKETS = ["US", "CN"]
 
 
-def build_news_pipeline(market: str, repo: NewsEntityRepo) -> PoolPipeline:
-    """Factory: assemble news pipeline for a given market and repo."""
+def build_news_pipeline(repo: NewsEntityRepo) -> PoolPipeline:
+    """Factory: assemble global news pipeline (market-agnostic)."""
     return PoolPipeline(
-        fetch=AlphaVantageNewsFetch(),
+        fetch=CompositeFetch(
+            [PerigonStoriesFetch(), PerigonAllFetch(), NewsAPIHeadlinesFetch()]
+        ),
         process=HybridSimilarityProcess(
             similarity_threshold=settings.news_similarity_threshold,
         ),
@@ -33,7 +40,7 @@ def build_news_pipeline(market: str, repo: NewsEntityRepo) -> PoolPipeline:
             max_age_days=settings.news_max_age_days,
         ),
         repo=repo,
-        market=market,
+        market=None,
     )
 
 
@@ -49,58 +56,75 @@ def build_value_pipeline(market: str, repo: ValueEntityRepo) -> PoolPipeline:
     )
 
 
+async def _record_run(
+    runs_col,
+    *,
+    pipeline: str,
+    market: str | None,
+    start: datetime,
+    duration: float,
+    result=None,
+    error: str | None = None,
+) -> None:
+    """Insert a PipelineRun record into MongoDB."""
+    doc: dict = {
+        "date": start.strftime("%Y-%m-%d"),
+        "market": market,
+        "pipeline": pipeline,
+        "duration": duration,
+        "created_at": start.isoformat(),
+    }
+    if error is not None:
+        doc["node_count"] = 0
+        doc["error_count"] = 1
+        doc["error"] = error
+    else:
+        doc["node_count"] = result.inserted + result.merged
+        doc["inserted"] = result.inserted
+        doc["merged"] = result.merged
+        doc["rescored"] = result.rescored
+        doc["error_count"] = 0
+    await runs_col.insert_one(doc)
+
+
 async def run_news_pipeline() -> None:
-    """Run news pipeline for all markets, record PipelineRun to MongoDB."""
+    """Run global news pipeline once (market-agnostic), record PipelineRun to MongoDB."""
     news_col = mongodb.get_collection("news_entities")
     runs_col = mongodb.get_collection("pipeline_runs")
 
-    for market in MARKETS:
-        repo = NewsEntityRepo(news_col)
-        pipeline = build_news_pipeline(market=market, repo=repo)
-        start = datetime.now(timezone.utc)
-        log.info("Running news pipeline for market=%s", market)
-        try:
-            result = await pipeline.run()
-            duration = (datetime.now(timezone.utc) - start).total_seconds()
-            await runs_col.insert_one(
-                {
-                    "date": start.strftime("%Y-%m-%d"),
-                    "market": market,
-                    "pipeline": "news",
-                    "duration": duration,
-                    "node_count": result.inserted + result.merged,
-                    "inserted": result.inserted,
-                    "merged": result.merged,
-                    "rescored": result.rescored,
-                    "error_count": 0,
-                    "created_at": start.isoformat(),
-                }
-            )
-            log.info(
-                "News pipeline market=%s done in %.1fs — %d inserted, %d merged, %d rescored",
-                market,
-                duration,
-                result.inserted,
-                result.merged,
-                result.rescored,
-            )
-        except Exception as e:
-            duration = (datetime.now(timezone.utc) - start).total_seconds()
-            log.error(
-                "News pipeline market=%s failed after %.1fs: %s", market, duration, e
-            )
-            await runs_col.insert_one(
-                {
-                    "date": start.strftime("%Y-%m-%d"),
-                    "market": market,
-                    "pipeline": "news",
-                    "duration": duration,
-                    "node_count": 0,
-                    "error_count": 1,
-                    "error": str(e),
-                    "created_at": start.isoformat(),
-                }
-            )
+    repo = NewsEntityRepo(news_col)
+    pipeline = build_news_pipeline(repo=repo)
+    start = datetime.now(timezone.utc)
+    log.info("Running global news pipeline")
+    try:
+        result = await pipeline.run()
+        duration = (datetime.now(timezone.utc) - start).total_seconds()
+        await _record_run(
+            runs_col,
+            pipeline="news",
+            market=None,
+            start=start,
+            duration=duration,
+            result=result,
+        )
+        log.info(
+            "News pipeline done in %.1fs — %d inserted, %d merged, %d rescored",
+            duration,
+            result.inserted,
+            result.merged,
+            result.rescored,
+        )
+    except Exception as e:
+        duration = (datetime.now(timezone.utc) - start).total_seconds()
+        log.error("News pipeline failed after %.1fs: %s", duration, e)
+        await _record_run(
+            runs_col,
+            pipeline="news",
+            market=None,
+            start=start,
+            duration=duration,
+            error=str(e),
+        )
 
 
 async def run_value_pipeline() -> None:
