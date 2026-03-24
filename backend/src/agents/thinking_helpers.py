@@ -40,7 +40,7 @@ def prepare_parent_nodes(parent_nodes: list[dict], current_layer: int) -> list[d
     prepared = []
     for n in parent_nodes:
         node_layer = n.get("layer")
-        reasoning = n.get("reasoning", "")
+        reasoning = n.get("reasoning") or ""
 
         # Truncate reasoning for nodes >1 layer behind current layer.
         # Nodes without a 'layer' field are kept full (safe fallback).
