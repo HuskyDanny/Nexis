@@ -330,7 +330,7 @@ async def fetch_perigon_stories(
     size: int = 10,
     source_group: str = "top100",
 ) -> list[dict]:
-    """Fetch clustered stories from Perigon /v1/stories endpoint.
+    """Fetch clustered stories from Perigon /v1/stories/all endpoint.
 
     Stories represent clusters of articles about the same event.
     High uniqueCount = broad coverage = likely high-impact macro event.
