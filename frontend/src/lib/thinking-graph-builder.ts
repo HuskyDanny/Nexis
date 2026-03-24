@@ -53,8 +53,7 @@ export function nodeStyle(
     boxShadow: isOpp
       ? "0 0 25px rgba(34, 197, 94, 0.2), 0 4px 20px rgba(0,0,0,0.4)"
       : `0 4px 20px rgba(0,0,0,0.3), 0 0 15px ${color}10`,
-    opacity: selected ? 1 : 0.5,
-    transition: "opacity 0.3s, border-color 0.3s",
+    transition: "background 0.3s, border-color 0.3s, color 0.3s",
   };
 }
 

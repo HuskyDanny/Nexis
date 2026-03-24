@@ -55,6 +55,8 @@ function PoolCard({
     [],
   );
   const isFloating = floating && !selected;
+  const edge = `1px solid ${selected ? color : "rgba(255,255,255,0.06)"}`;
+  const accent = `3px solid ${color}`;
 
   return (
     <button
@@ -65,9 +67,10 @@ function PoolCard({
           ? "rgba(255,255,255,0.08)"
           : "rgba(15, 20, 35, 0.7)",
         backdropFilter: "blur(8px)",
-        border: `1px solid ${selected ? color : "rgba(255,255,255,0.06)"}`,
-        borderLeft: side === "left" ? `3px solid ${color}` : undefined,
-        borderRight: side === "right" ? `3px solid ${color}` : undefined,
+        borderTop: edge,
+        borderBottom: edge,
+        borderLeft: side === "left" ? accent : edge,
+        borderRight: side === "right" ? accent : edge,
         borderRadius: 10,
         padding: "10px 14px",
         boxShadow: selected ? `0 0 20px ${color}30` : "none",
