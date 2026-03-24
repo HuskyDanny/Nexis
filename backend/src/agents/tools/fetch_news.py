@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import re
 
 from crewai.tools import BaseTool
 from pydantic import Field
@@ -14,31 +15,32 @@ from src.services.newsapi import fetch_newsapi_everything
 
 log = get_logger("fetch_news_tool")
 
+_MAX_TOKEN_LEN = 40
 
-async def _has_api_budget() -> bool:
-    """Check if we have remaining API budget for agent-initiated calls."""
+
+async def _provider_budgets() -> dict[str, bool]:
+    """Return per-provider budget availability."""
     from datetime import datetime, timezone
 
-    perigon_col = mongodb.get_collection("perigon_usage")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    perigon_col = mongodb.get_collection("perigon_usage")
     pg_doc = await perigon_col.find_one({"date": today})
-    pg_count = pg_doc.get("count", 0) if pg_doc else 0
+    pg_remaining = (pg_doc.get("count", 0) if pg_doc else 0) < settings.perigon_agent_daily_cap
 
     na_col = mongodb.get_collection("newsapi_usage")
     na_doc = await na_col.find_one({"date": today})
-    na_count = na_doc.get("count", 0) if na_doc else 0
+    na_remaining = (na_doc.get("count", 0) if na_doc else 0) < settings.newsapi_agent_daily_cap
 
-    return (
-        pg_count < settings.perigon_agent_daily_cap
-        or na_count < settings.newsapi_agent_daily_cap
-    )
+    return {"perigon": pg_remaining, "newsapi": na_remaining}
 
 
 async def _fallback_text_search(query: str, limit: int = 5) -> list[dict]:
     """Search existing news_entities by text when API budget is exhausted."""
     col = mongodb.get_collection("news_entities")
     words = query.lower().split()[:3]
-    regex_pattern = "|".join(words)
+    escaped = [re.escape(w)[:_MAX_TOKEN_LEN] for w in words]
+    regex_pattern = "|".join(escaped)
     cursor = (
         col.find(
             {
@@ -73,20 +75,23 @@ class FetchNewsTool(BaseTool):
             return asyncio.run(self.arun(query=query))
 
     async def arun(self, query: str) -> list[dict]:
-        """Async implementation — search Perigon then NewsAPI."""
-        if not await _has_api_budget():
-            log.info("API budget exhausted, falling back to text search: %s", query)
+        """Async implementation — call only providers that still have budget."""
+        budgets = await _provider_budgets()
+
+        if not any(budgets.values()):
+            log.info("All API budgets exhausted, falling back to text search: %s", query)
             return await _fallback_text_search(query, self.max_results)
 
         results: list[dict] = []
 
-        try:
-            perigon_items = await fetch_perigon_news(query=query, size=self.max_results)
-            results.extend(perigon_items)
-        except Exception as e:
-            log.warning("Perigon fetch failed in tool: %s", e)
+        if budgets["perigon"]:
+            try:
+                perigon_items = await fetch_perigon_news(query=query, size=self.max_results)
+                results.extend(perigon_items)
+            except Exception as e:
+                log.warning("Perigon fetch failed in tool: %s", e)
 
-        if len(results) < self.max_results:
+        if len(results) < self.max_results and budgets["newsapi"]:
             try:
                 newsapi_items = await fetch_newsapi_everything(
                     query=query,

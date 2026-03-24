@@ -4,18 +4,18 @@ Free tier: 100 req/day, 24h article delay, dev-only license.
 """
 
 import hashlib
-import os
 from datetime import datetime, timezone
 
 import httpx
 
+from src.core.config import settings
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
 
 log = get_logger("newsapi")
 
 NEWSAPI_BASE_URL = "https://newsapi.org/v2"
-NEWSAPI_KEY = os.environ.get("NEWSAPI_API_KEY", "")
+NEWSAPI_KEY = settings.newsapi_api_key
 
 # --- Keyword-based classification (lightweight, no ML) ---
 

@@ -48,7 +48,11 @@ class NewsDecayScore:
         return min(1.0, 0.2 + 0.2 * count) if count else 0.0
 
     def _scope_factor(self, entity: dict) -> float:
-        scope = entity.get("scope", 0)
+        scope = entity.get("scope", 2)
+        try:
+            scope = max(0, min(5, int(scope)))
+        except (TypeError, ValueError):
+            scope = 2
         return scope / 5.0
 
     def _cluster_factor(self, entity: dict) -> float:

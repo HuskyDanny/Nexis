@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
+from src.core.config import settings
 from src.pipelines.news.quota import apply_tiered_quota
 from src.services.data_sources import fetch_real_news, fetch_real_stocks
 
@@ -36,7 +37,8 @@ async def get_pools(date: str, market: str = "US", include_stale: bool = False):
 
     # Apply tiered quota to guarantee macro news representation
     news_entities = apply_tiered_quota(
-        sorted(raw_news, key=lambda x: x.get("score", 0), reverse=True)
+        sorted(raw_news, key=lambda x: x.get("score", 0), reverse=True),
+        macro_ratio=settings.news_macro_quota_ratio,
     )
 
     # Legacy fallback during migration

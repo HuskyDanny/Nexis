@@ -11,16 +11,25 @@ class NewsEntityRepo:
     async def get_by_id(self, entity_id: str) -> dict | None:
         return await self.collection.find_one({"id": entity_id}, {"_id": 0})
 
-    async def get_active(self, market: str) -> list[dict]:
-        cursor = self.collection.find(
-            {"status": "active", "market": market}, {"_id": 0}
-        )
+    async def get_active(self, market: str | None = None) -> list[dict]:
+        q: dict = {"status": "active"}
+        if market is not None:
+            q["market"] = market
+        cursor = self.collection.find(q, {"_id": 0})
         return await cursor.to_list(length=None)
 
-    async def get_all(self, market: str, include_stale: bool = False) -> list[dict]:
-        q = (
-            {"status": {"$in": ["active", "stale"]}, "market": market}
+    async def get_all(
+        self, market: str | None = None, include_stale: bool = False
+    ) -> list[dict]:
+        q: dict = (
+            {"status": {"$in": ["active", "stale"]}}
             if include_stale
-            else {"status": "active", "market": market}
+            else {"status": "active"}
         )
+        if market is not None:
+            q["market"] = market
         return await self.collection.find(q, {"_id": 0}).to_list(length=None)
+
+    async def ensure_indexes(self) -> None:
+        await self.collection.create_index("scope")
+        await self.collection.create_index("status")

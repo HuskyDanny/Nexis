@@ -30,7 +30,7 @@ class ThresholdRetain:
 
 
 class PoolPipeline:
-    def __init__(self, fetch, process, score, retain, repo, market: str):
+    def __init__(self, fetch, process, score, retain, repo, market: str | None = None):
         self.fetch = fetch
         self.process = process
         self.score = score

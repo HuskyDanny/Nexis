@@ -23,7 +23,7 @@ class NewsEntity(BaseModel):
     first_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: EntityStatus = EntityStatus.ACTIVE
-    market: str = "US"  # KEPT until Task 3
     origin: str = "perigon"
     story_cluster_size: int = 1
     scope: int = 2
+    market: str | None = None  # Deprecated: kept for backward compat, not used in queries
