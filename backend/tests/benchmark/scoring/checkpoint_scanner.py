@@ -100,8 +100,14 @@ def check_direction(concept: str, node_text: str) -> bool | None:
 
     Returns:
         True   — concept has a direction term AND node has the same (or compatible) direction.
-        False  — node explicitly uses the antonym of the concept's direction term.
+        False  — node explicitly uses the antonym of the concept's direction term
+                 WITHOUT also containing the concept's direction word itself.
         None   — no direction terms found in concept (can't determine directionality).
+
+    A node that discusses multiple phenomena may contain both a direction word
+    and its antonym (e.g., "inflation increase... rates decrease").  When BOTH
+    appear, the text is multi-directional — not contradictory — so we return
+    True rather than False.
     """
     concept_terms = set(extract_key_terms(concept))
     node_terms = set(extract_key_terms(node_text))
@@ -114,7 +120,12 @@ def check_direction(concept: str, node_text: str) -> bool | None:
     for cdir in concept_dirs:
         antonym = _ANTONYMS.get(cdir)
         if antonym and antonym in node_terms:
-            # Explicit contradiction found
+            # Antonym found — but if the concept's own direction word also
+            # appears in the node, the text discusses both directions (e.g.,
+            # "inflation increase... cannot decrease rates").  That is not a
+            # contradiction; the node covers multiple directional statements.
+            if cdir in node_terms:
+                continue  # both directions present — not contradictory
             return False
 
     # No contradiction found — direction is consistent (or absent in node, which is fine)
@@ -130,13 +141,17 @@ def check_checkpoint_keyword(
     checkpoint: dict,
     layer: int,
     layer_nodes: list[dict],
-    threshold: float = 0.7,
+    threshold: float = 0.5,
 ) -> CheckpointResult:
     """Keyword fast-path: evaluate a single checkpoint against layer nodes.
 
     For each node, concatenates ``content`` + ``reasoning`` and computes
     term-overlap ratio against the checkpoint concept.  If overlap >= threshold
     AND direction is not explicitly wrong, the checkpoint is a hit.
+
+    The default threshold of 0.5 balances recall (LLM-generated text often
+    rephrases concepts) with precision (direction checking prevents false
+    positives from term collisions).
     """
     concept: str = checkpoint.get("text", checkpoint.get("concept", ""))
     required: bool = checkpoint.get("required", True)
@@ -236,17 +251,22 @@ async def check_checkpoint_llm(
     layer_text = "\n".join(layer_text_parts)
 
     prompt = (
-        f"You are a financial reasoning evaluator.\n\n"
+        f"You are a strict financial reasoning evaluator.\n\n"
         f"Concept to verify:\n{concept}\n\n"
         f"Layer {layer} nodes:\n{layer_text}\n\n"
-        f"Does the layer capture the concept above? "
+        f"Does ANY node EXPLICITLY capture the concept above?\n\n"
+        f"CALIBRATION EXAMPLES:\n"
+        f'- Concept: "oil price increase" + Node: "crude oil spikes on supply fears" → HIT (same claim)\n'
+        f'- Concept: "oil price increase" + Node: "energy sector equities rally" → MISS (related topic, but doesn\'t state oil prices increase)\n'
+        f'- Concept: "gold falls relative to strong USD" + Node: "gold rallies as safe-haven" → MISS (opposite direction)\n\n'
+        f"Be strict: topical adjacency is NOT a hit. The node must make the same causal claim.\n"
         f"Reply with JSON: "
         f'{{"hit": true|false, "node_id": "<id or null>", '
         f'"direction_correct": true|false|null, "evidence": "<brief>"}}'
     )
 
     try:
-        response = await judge_model.agenerate(prompt)
+        response = await judge_model.a_generate(prompt)
         import json
 
         data = json.loads(response)

@@ -227,7 +227,8 @@ async def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  BENCHMARK E2E RUN")
+    print("  SCORING PIPELINE SMOKE TEST")
+    print("  (mock trace — tests scoring code, not pipeline quality)")
     print("=" * 60)
 
     # Step 1: Build mock trace

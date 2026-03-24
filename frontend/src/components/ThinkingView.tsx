@@ -103,15 +103,6 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     loadSession();
   }, [loadSession]);
 
-  // Poll for updates when status is "thinking" (auto mode)
-  useEffect(() => {
-    if (session?.status !== "thinking") return;
-    const interval = setInterval(() => {
-      loadSession();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [session?.status, loadSession]);
-
   const refreshSession = useCallback(async () => {
     try {
       const res = await graphApi.getSession(sessionId);
@@ -179,6 +170,15 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       log.error("Failed to load session incrementally:", err);
     }
   }, [sessionId, setNodes, setEdges, savePositions]);
+
+  // Poll for updates when status is "thinking" (auto mode)
+  useEffect(() => {
+    if (session?.status !== "thinking") return;
+    const interval = setInterval(() => {
+      loadSessionIncremental();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [session?.status, loadSessionIncremental]);
 
   // Step to next layer
   const handleStep = useCallback(async () => {

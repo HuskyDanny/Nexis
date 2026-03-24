@@ -19,8 +19,8 @@ from tests.benchmark.models import (
 
 WEIGHTS: dict[str, float] = {
     "checkpoint_hit_rate": 0.25,
-    "match_accuracy": 0.15,
-    "skill_compliance": 0.05,
+    "match_accuracy": 0.20,
+    "skill_compliance": 0.00,  # excluded: structurally always 100% with pre-loaded skills
     "reasoning_correctness": 0.20,
     "reasoning_completeness": 0.15,
     "match_quality": 0.10,
@@ -54,16 +54,40 @@ def compute_overall(
     match_quality: float,
     depth_appropriateness: float,
 ) -> tuple[float, str]:
-    """Return (weighted_score, grade) from individual dimension scores."""
-    score = (
-        WEIGHTS["checkpoint_hit_rate"] * checkpoint_hit_rate
-        + WEIGHTS["match_accuracy"] * match_accuracy
-        + WEIGHTS["skill_compliance"] * skill_compliance
-        + WEIGHTS["reasoning_correctness"] * reasoning_correctness
-        + WEIGHTS["reasoning_completeness"] * reasoning_completeness
-        + WEIGHTS["match_quality"] * match_quality
-        + WEIGHTS["depth_appropriateness"] * depth_appropriateness
-    )
+    """Return (weighted_score, grade) from individual dimension scores.
+
+    When Pass 2 dimensions are all 0 (not run), the score is re-weighted
+    to use only Pass 1 dimensions so the grade reflects actual coverage.
+    """
+    dimensions = {
+        "checkpoint_hit_rate": checkpoint_hit_rate,
+        "match_accuracy": match_accuracy,
+        "skill_compliance": skill_compliance,
+        "reasoning_correctness": reasoning_correctness,
+        "reasoning_completeness": reasoning_completeness,
+        "match_quality": match_quality,
+        "depth_appropriateness": depth_appropriateness,
+    }
+
+    # Check if Pass 2 was actually run (any non-zero LLM judge dimension)
+    pass2_keys = {
+        "reasoning_correctness",
+        "reasoning_completeness",
+        "match_quality",
+        "depth_appropriateness",
+    }
+    pass2_ran = any(dimensions[k] > 0 for k in pass2_keys)
+
+    score = sum(WEIGHTS[k] * dimensions[k] for k in dimensions)
+
+    if not pass2_ran:
+        # Cap grade at C when Pass 2 is absent — surface-level checks alone
+        # cannot earn above C regardless of how perfect they are.
+        grade = _grade(score)
+        if grade in ("A", "B"):
+            grade = "C*"  # asterisk signals incomplete evaluation
+        return round(score, 10), grade
+
     return round(score, 10), _grade(round(score, 10))
 
 
