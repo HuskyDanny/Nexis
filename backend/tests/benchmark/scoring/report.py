@@ -19,8 +19,8 @@ from tests.benchmark.models import (
 
 WEIGHTS: dict[str, float] = {
     "checkpoint_hit_rate": 0.25,
-    "match_accuracy": 0.15,
-    "skill_compliance": 0.05,
+    "match_accuracy": 0.20,
+    "skill_compliance": 0.00,  # excluded: structurally always 100% with pre-loaded skills
     "reasoning_correctness": 0.20,
     "reasoning_completeness": 0.15,
     "match_quality": 0.10,
@@ -53,18 +53,34 @@ def compute_overall(
     reasoning_completeness: float,
     match_quality: float,
     depth_appropriateness: float,
+    pass2_ran: bool = True,
 ) -> tuple[float, str]:
-    """Return (weighted_score, grade) from individual dimension scores."""
-    score = (
-        WEIGHTS["checkpoint_hit_rate"] * checkpoint_hit_rate
-        + WEIGHTS["match_accuracy"] * match_accuracy
-        + WEIGHTS["skill_compliance"] * skill_compliance
-        + WEIGHTS["reasoning_correctness"] * reasoning_correctness
-        + WEIGHTS["reasoning_completeness"] * reasoning_completeness
-        + WEIGHTS["match_quality"] * match_quality
-        + WEIGHTS["depth_appropriateness"] * depth_appropriateness
-    )
-    return round(score, 10), _grade(round(score, 10))
+    """Return (weighted_score, grade) from individual dimension scores.
+
+    Args:
+        pass2_ran: Explicit flag indicating whether Pass 2 (LLM judge) was
+            executed. When False, the grade is suffixed with ``*`` to signal
+            incomplete evaluation. The numeric score still uses full weights
+            so Pass 1-only runs (max ~0.45) naturally land at D, honestly
+            reflecting that 55% of evaluation was skipped.
+    """
+    dimensions = {
+        "checkpoint_hit_rate": checkpoint_hit_rate,
+        "match_accuracy": match_accuracy,
+        "skill_compliance": skill_compliance,
+        "reasoning_correctness": reasoning_correctness,
+        "reasoning_completeness": reasoning_completeness,
+        "match_quality": match_quality,
+        "depth_appropriateness": depth_appropriateness,
+    }
+
+    score = sum(WEIGHTS[k] * dimensions[k] for k in dimensions)
+    grade = _grade(round(score, 10))
+
+    if not pass2_ran:
+        grade = f"{grade}*"  # asterisk signals incomplete evaluation
+
+    return round(score, 10), grade
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +108,7 @@ def build_report(
         reasoning_completeness=dim_by_name.get("Reasoning Completeness", 0.0),
         match_quality=dim_by_name.get("Match Quality", 0.0),
         depth_appropriateness=dim_by_name.get("Depth Appropriateness", 0.0),
+        pass2_ran=len(pass2.dimensions) > 0,
     )
 
     return BenchmarkReport(

@@ -49,7 +49,7 @@ async def run_scenario_live(
     from src.services.thinking_service import run_layer
 
     run_id = f"run-{uuid4().hex[:8]}"
-    timestamp = datetime.now(timezone.utc)
+    timestamp = datetime.now(timezone.utc).isoformat()
     layers: list[LayerTrace] = []
     chain_summary = ""
     total_tokens = 0
@@ -103,17 +103,34 @@ async def run_scenario_live(
         # Build all nodes for this layer
         all_nodes = result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
 
-        # Build agent traces (simplified — token counts from CrewAI not yet wired)
+        # Build agent traces — skills are pre-loaded into agent prompts, so we
+        # record the known skill sets per agent role.
+        from src.agents.thinking_helpers import THINKER_SKILLS, MATCHER_SKILLS
+
+        thinker_skills = [s for s in THINKER_SKILLS]
+        matcher_skills = [s for s in MATCHER_SKILLS] if result.opportunity_nodes else []
+
         agent_traces = [
             AgentTrace(
                 agent="thinker",
                 input_summary=f"Layer {layer_num}: {len(parent_nodes)} parents, {len(scenario['news_pool'])} news",
                 output_raw=json.dumps(result.effect_nodes[:3], default=str),
-                skills_loaded=[],  # TODO: wire skill tracking via tool wrapper
-                tokens_used=0,  # TODO: extract from CrewAI result.token_usage
+                skills_loaded=thinker_skills,
+                tokens_used=0,
                 latency_ms=elapsed_ms,
             ),
         ]
+        if result.opportunity_nodes:
+            agent_traces.append(
+                AgentTrace(
+                    agent="matcher",
+                    input_summary=f"Layer {layer_num}: {len(result.effect_nodes)} effects",
+                    output_raw=json.dumps(result.opportunity_nodes[:3], default=str),
+                    skills_loaded=matcher_skills,
+                    tokens_used=0,
+                    latency_ms=0,
+                ),
+            )
 
         layer_trace = LayerTrace(
             layer=layer_num,

@@ -8,9 +8,7 @@ Public API:
 - run_matcher()    — value opportunity matching
 - run_controller() — meta-reasoning and termination
 
-Re-exported from thinking_helpers:
-- convergence_score(), _parse_json_response()
-- THINKER_SKILLS, MATCHER_SKILLS
+Re-exported from thinking_helpers: convergence_score(), _parse_json_response()
 """
 
 import json
@@ -20,7 +18,7 @@ from uuid import uuid4
 from crewai import Agent, Crew, Task
 
 from src.agents.llm_config import get_main_llm
-from src.agents.skills.base import build_system_prompt, load_skill
+from src.agents.skills.base import build_system_prompt_with_skills
 from src.agents.thinking_helpers import (
     CONFIDENCE_THRESHOLD,
     MATCHER_SKILLS,
@@ -32,7 +30,7 @@ from src.agents.thinking_helpers import (
 log = logging.getLogger("nexis.agents")
 
 # Re-export for backward compat and test access
-_parse_json_response = parse_json_response
+_parse_json_response = parse_json_response  # noqa: F841
 
 
 def run_thinker(
@@ -50,13 +48,12 @@ def run_thinker(
         return [], [], [], []
 
     try:
-        system_prompt = build_system_prompt(allowed_skills=THINKER_SKILLS)
+        system_prompt = build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
         thinker = Agent(
             role="Financial Effects Analyst",
             goal="Identify causal market effects using your analytical skills",
             backstory=system_prompt,
             llm=get_main_llm(),
-            tools=[load_skill],
             verbose=False,
         )
 
@@ -245,13 +242,12 @@ def run_matcher(
         return [], []
 
     try:
-        system_prompt = build_system_prompt(allowed_skills=MATCHER_SKILLS)
+        system_prompt = build_system_prompt_with_skills(allowed_skills=MATCHER_SKILLS)
         matcher = Agent(
             role="Value Opportunity Matcher",
             goal="Match market effects to undervalued stocks",
             backstory=system_prompt,
             llm=get_main_llm(),
-            tools=[load_skill],
             verbose=False,
         )
 
