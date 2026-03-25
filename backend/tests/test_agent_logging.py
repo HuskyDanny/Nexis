@@ -3,6 +3,7 @@
 Verifies that:
 1. Each agent call emits a structured INFO log line with timing and results
 2. DEBUG level enables CrewAI verbose mode and logs raw LLM responses
+3. _is_debug() reads LOG_LEVEL env var directly (not cached logger level)
 """
 
 from __future__ import annotations
@@ -222,14 +223,15 @@ class TestDebugRawResponseLogging:
         mock_crew.kickoff.return_value = _mock_crew_result(raw_json)
         mock_crew_cls.return_value = mock_crew
 
-        # _is_debug() uses log.isEnabledFor — caplog.at_level sets the logger level
-        with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
-            run_thinker(
-                parent_nodes=_parent_nodes(),
-                chain_summary="",
-                news_pool=[],
-                layer=1,
-            )
+        # _is_debug() reads LOG_LEVEL env directly; caplog.at_level captures output
+        with patch.dict(os.environ, {"LOG_LEVEL": "DEBUG"}):
+            with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
+                run_thinker(
+                    parent_nodes=_parent_nodes(),
+                    chain_summary="",
+                    news_pool=[],
+                    layer=1,
+                )
 
         debug_logs = [r for r in caplog.records if r.levelno == logging.DEBUG]
         raw_logs = [
@@ -255,8 +257,9 @@ class TestDebugRawResponseLogging:
         mock_crew.kickoff.return_value = _mock_crew_result(raw_json)
         mock_crew_cls.return_value = mock_crew
 
-        with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
-            run_matcher(effects=_effects(), value_pool=_value_pool())
+        with patch.dict(os.environ, {"LOG_LEVEL": "DEBUG"}):
+            with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
+                run_matcher(effects=_effects(), value_pool=_value_pool())
 
         debug_logs = [r for r in caplog.records if r.levelno == logging.DEBUG]
         raw_logs = [
@@ -278,14 +281,15 @@ class TestDebugRawResponseLogging:
         mock_crew.kickoff.return_value = _mock_crew_result(raw_json)
         mock_crew_cls.return_value = mock_crew
 
-        with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
-            run_controller(
-                chain_summary="test",
-                effects=_effects(),
-                matches=[],
-                layer=1,
-                max_depth=3,
-            )
+        with patch.dict(os.environ, {"LOG_LEVEL": "DEBUG"}):
+            with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
+                run_controller(
+                    chain_summary="test",
+                    effects=_effects(),
+                    matches=[],
+                    layer=1,
+                    max_depth=3,
+                )
 
         debug_logs = [r for r in caplog.records if r.levelno == logging.DEBUG]
         raw_logs = [
