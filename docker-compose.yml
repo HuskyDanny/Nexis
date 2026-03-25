@@ -24,8 +24,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
     environment:
       - VITE_API_URL=http://backend:8000
     # Dev override: use vite dev server (targets Node build stage, not nginx)

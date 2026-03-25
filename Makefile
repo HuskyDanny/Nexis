@@ -10,7 +10,7 @@ logs:
 	docker compose logs -f
 
 test:
-	docker compose exec backend python -m pytest tests/ -x -q
+	cd backend && python -m pytest tests/ -x -q
 
 health:
 	@curl -s http://localhost:8000/api/health/ready | python3 -m json.tool
@@ -28,4 +28,4 @@ prod:
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 test-ci:
-	docker compose run --rm --no-deps backend python -m pytest tests/ -v -m "not benchmark"
+	cd backend && python -m pytest tests/ -v -m "not benchmark"
