@@ -10,6 +10,7 @@ No mock fallback. If LLM is down, pipeline returns empty/partial results.
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Optional
 
 from src.agents.thinking_crew import run_controller, run_matcher, run_thinker
 from src.core.logger import get_logger
@@ -32,16 +33,20 @@ class LayerResult:
     controller_decision: dict = field(
         default_factory=lambda: {"continue": False, "reasoning": "", "summary": ""}
     )
+    tokens_used: dict[str, int] = field(default_factory=dict)
 
 
-def _empty_layer_result(reason: str) -> LayerResult:
+def _empty_layer_result(
+    reason: str, tokens_used: Optional[dict[str, int]] = None
+) -> LayerResult:
     """Return an empty LayerResult that signals stop."""
     return LayerResult(
         controller_decision={
             "continue": False,
             "reasoning": reason,
             "summary": "",
-        }
+        },
+        tokens_used=tokens_used if tokens_used is not None else {},
     )
 
 
@@ -81,28 +86,32 @@ async def run_layer(
     - Controller fails -> default: continue if layer < 3, stop if >= 3
     """
     # --- Thinker ---
+    thinker_tokens = 0
     try:
-        effect_nodes, fetch_nodes, effect_edges, fetch_edges = await _call_with_retry(
-            run_thinker,
-            parent_nodes=parent_nodes,
-            chain_summary=chain_summary,
-            news_pool=news_pool,
-            layer=layer,
+        effect_nodes, fetch_nodes, effect_edges, fetch_edges, thinker_tokens = (
+            await _call_with_retry(
+                run_thinker,
+                parent_nodes=parent_nodes,
+                chain_summary=chain_summary,
+                news_pool=news_pool,
+                layer=layer,
+            )
         )
     except Exception as e:
         log.error("Thinker failed at layer %d: %s", layer, e)
-        return _empty_layer_result(f"Thinker failed: {e}")
+        return _empty_layer_result(f"Thinker failed: {e}", {"thinker": thinker_tokens})
 
     if not effect_nodes:
         log.info("Thinker produced no effects at layer %d", layer)
-        return _empty_layer_result("Thinker produced no effects")
+        return _empty_layer_result("Thinker produced no effects", {"thinker": thinker_tokens})
 
     all_edges = list(effect_edges) + list(fetch_edges)
 
     # --- Matcher ---
     opportunity_nodes: list[dict] = []
+    matcher_tokens = 0
     try:
-        opportunity_nodes, match_edges = await _call_with_retry(
+        opportunity_nodes, match_edges, matcher_tokens = await _call_with_retry(
             run_matcher,
             effects=effect_nodes,
             value_pool=value_pool,
@@ -114,8 +123,9 @@ async def run_layer(
         )
 
     # --- Controller ---
+    controller_tokens = 0
     try:
-        ctrl = await _call_with_retry(
+        ctrl, controller_tokens = await _call_with_retry(
             run_controller,
             chain_summary=chain_summary,
             effects=effect_nodes,
@@ -133,12 +143,19 @@ async def run_layer(
             "summary": chain_summary,
         }
 
+    tokens_used = {
+        "thinker": thinker_tokens,
+        "matcher": matcher_tokens,
+        "controller": controller_tokens,
+    }
+
     return LayerResult(
         effect_nodes=effect_nodes,
         fetch_nodes=fetch_nodes,
         opportunity_nodes=opportunity_nodes,
         all_edges=all_edges,
         controller_decision=ctrl,
+        tokens_used=tokens_used,
     )
 
 

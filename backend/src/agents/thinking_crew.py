@@ -1,18 +1,6 @@
-"""Three-agent thinking pipeline: Thinker, Matcher, Controller.
-
-Each function creates a specialized CrewAI agent, kicks off a crew,
-parses the JSON response, and constructs graph nodes/edges.
-
-Public API:
-- run_thinker()    — causal effects reasoning
-- run_matcher()    — value opportunity matching
-- run_controller() — meta-reasoning and termination
-
-Re-exported from thinking_helpers: convergence_score(), _parse_json_response()
-"""
+"""Three-agent thinking pipeline: Thinker, Matcher, Controller."""
 
 import json
-import logging
 from uuid import uuid4
 
 from crewai import Agent, Crew, Task
@@ -28,11 +16,11 @@ from src.agents.thinking_helpers import (
     parse_json_response,
     prepare_parent_nodes,
 )
+from src.core.logger import get_logger
 
-log = logging.getLogger("nexis.agents")
+log = get_logger("agents")
 
-# Re-export for backward compat and test access
-_parse_json_response = parse_json_response  # noqa: F841
+_parse_json_response = parse_json_response  # noqa: F841 — re-export
 _prepare_parent_nodes = prepare_parent_nodes
 
 
@@ -41,15 +29,15 @@ def run_thinker(
     chain_summary: str,
     news_pool: list[dict],
     layer: int,
-) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict], list[dict], list[dict], int]:
     """Trace causal effects one layer deeper.
 
-    Returns:
-        (effect_nodes, fetch_nodes, effect_edges, fetch_edges)
+    Returns (effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens).
     """
     if not parent_nodes:
-        return [], [], [], []
+        return [], [], [], [], 0
 
+    tokens = 0
     try:
         system_prompt = build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
         thinker = Agent(
@@ -110,6 +98,12 @@ def run_thinker(
         crew = Crew(agents=[thinker], tasks=[think_task], verbose=False)
         result = crew.kickoff()
 
+        tokens = (
+            result.token_usage.total_tokens
+            if hasattr(result, "token_usage") and result.token_usage
+            else 0
+        )
+
         raw = result.raw if hasattr(result, "raw") else str(result)
         parsed = parse_json_response(raw)
         if parsed is None:
@@ -118,15 +112,16 @@ def run_thinker(
                 layer,
                 raw[:500],
             )
-            return [], [], [], []
+            return [], [], [], [], tokens
 
-        return _build_thinker_output(
+        effect_nodes, fetch_nodes, effect_edges, fetch_edges = _build_thinker_output(
             parsed.get("effects", []), parent_nodes, news_pool, layer
         )
+        return effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens
 
     except Exception as e:
         log.error("run_thinker failed at layer %d: %s", layer, e)
-        return [], [], [], []
+        return [], [], [], [], tokens
 
 
 def _build_thinker_output(
@@ -224,18 +219,12 @@ def _build_thinker_output(
 def run_matcher(
     effects: list[dict],
     value_pool: list[dict],
-) -> tuple[list[dict], list[dict]]:
-    """Match effects against value stocks to find opportunities.
-
-    Opportunities placed at same layer as parent effect.
-    No ticker dedup — different causal paths are distinct opportunities.
-
-    Returns:
-        (opportunity_nodes, edges)
-    """
+) -> tuple[list[dict], list[dict], int]:
+    """Match effects to value stocks. Returns (opportunity_nodes, edges, tokens)."""
     if not effects or not value_pool:
-        return [], []
+        return [], [], 0
 
+    tokens = 0
     try:
         system_prompt = build_system_prompt_with_skills(allowed_skills=MATCHER_SKILLS)
         matcher = Agent(
@@ -295,17 +284,26 @@ def run_matcher(
         crew = Crew(agents=[matcher], tasks=[match_task], verbose=False)
         result = crew.kickoff()
 
+        tokens = (
+            result.token_usage.total_tokens
+            if hasattr(result, "token_usage") and result.token_usage
+            else 0
+        )
+
         raw = result.raw if hasattr(result, "raw") else str(result)
         parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Matcher JSON parse failed")
-            return [], []
+            return [], [], tokens
 
-        return _build_matcher_output(parsed.get("matches", []), effects, value_pool)
+        opp_nodes, edges = _build_matcher_output(
+            parsed.get("matches", []), effects, value_pool
+        )
+        return opp_nodes, edges, tokens
 
     except Exception as e:
         log.error("run_matcher failed: %s", e)
-        return [], []
+        return [], [], tokens
 
 
 def _build_matcher_output(
@@ -378,19 +376,15 @@ def run_controller(
     layer: int,
     max_depth: int,
     confidence_threshold: float = CONFIDENCE_THRESHOLD,
-) -> dict:
-    """Evaluate reasoning quality and decide whether to continue.
-
-    Returns:
-        {"continue": bool, "reasoning": str, "summary": str}
-    """
+) -> tuple[dict, int]:
+    """Evaluate reasoning quality and decide whether to continue."""
     # Deterministic stops — no LLM needed
     if not effects:
         return {
             "continue": False,
             "reasoning": "No effects produced by thinker — nothing to explore.",
             "summary": chain_summary,
-        }
+        }, 0
 
     avg_conf = sum(e.get("confidence", 0) for e in effects) / len(effects)
 
@@ -399,7 +393,7 @@ def run_controller(
             "continue": False,
             "reasoning": f"Reached max depth ({max_depth}). Stopping.",
             "summary": chain_summary,
-        }
+        }, 0
 
     if avg_conf < confidence_threshold:
         return {
@@ -409,9 +403,10 @@ def run_controller(
                 f"{confidence_threshold}). Further reasoning would be speculative."
             ),
             "summary": chain_summary,
-        }
+        }, 0
 
     # LLM-based decision
+    tokens = 0
     try:
         controller = Agent(
             role="Thinking Chain Evaluator",
@@ -465,6 +460,12 @@ def run_controller(
         crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=False)
         result = crew.kickoff()
 
+        tokens = (
+            result.token_usage.total_tokens
+            if hasattr(result, "token_usage") and result.token_usage
+            else 0
+        )
+
         raw = result.raw if hasattr(result, "raw") else str(result)
         parsed = parse_json_response(raw)
         if parsed is None:
@@ -473,13 +474,13 @@ def run_controller(
                 "continue": False,
                 "reasoning": "Error: failed to parse controller response.",
                 "summary": chain_summary,
-            }
+            }, tokens
 
         return {
             "continue": bool(parsed.get("continue", False)),
             "reasoning": parsed.get("reasoning", ""),
             "summary": parsed.get("summary", chain_summary),
-        }
+        }, tokens
 
     except Exception as e:
         log.error("run_controller failed at layer %d: %s", layer, e)
@@ -487,4 +488,4 @@ def run_controller(
             "continue": False,
             "reasoning": f"Error in controller: {e}",
             "summary": chain_summary,
-        }
+        }, tokens

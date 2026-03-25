@@ -83,7 +83,7 @@ def thinker_result_layer1():
     fetch_edges = [
         {"source": "seed-1", "target": "fetch-1", "relationship": "fetched_for"}
     ]
-    return effect_nodes, fetch_nodes, effect_edges, fetch_edges
+    return effect_nodes, fetch_nodes, effect_edges, fetch_edges, 100
 
 
 def thinker_result_layer2():
@@ -105,7 +105,7 @@ def thinker_result_layer2():
     fetch_nodes = []
     effect_edges = [{"source": "eff-1", "target": "eff-2", "relationship": "compounds"}]
     fetch_edges = []
-    return effect_nodes, fetch_nodes, effect_edges, fetch_edges
+    return effect_nodes, fetch_nodes, effect_edges, fetch_edges, 80
 
 
 def matcher_result_layer1():
@@ -125,11 +125,11 @@ def matcher_result_layer1():
         },
     ]
     match_edges = [{"source": "eff-1", "target": "opp-1", "relationship": "matches"}]
-    return opp_nodes, match_edges
+    return opp_nodes, match_edges, 50
 
 
 def matcher_result_layer2():
-    return [], []
+    return [], [], 0
 
 
 def controller_continue():
@@ -137,7 +137,7 @@ def controller_continue():
         "continue": True,
         "reasoning": "More to explore",
         "summary": "Chain continues",
-    }
+    }, 30
 
 
 def controller_stop():
@@ -145,4 +145,4 @@ def controller_stop():
         "continue": False,
         "reasoning": "Diminishing returns",
         "summary": "Chain done",
-    }
+    }, 25

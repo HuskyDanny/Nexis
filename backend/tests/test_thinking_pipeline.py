@@ -146,7 +146,7 @@ class TestRunLayer:
     async def test_thinker_returns_empty_effects_stops(
         self, mock_thinker, mock_matcher, mock_ctrl
     ):
-        mock_thinker.return_value = ([], [], [], [])
+        mock_thinker.return_value = ([], [], [], [], 0)
 
         from src.services.thinking_service import run_layer
 
@@ -265,7 +265,7 @@ class TestRunPipeline:
         mock_thinker.side_effect = [thinker_result_layer1(), thinker_result_layer2()]
         mock_matcher.side_effect = [matcher_result_layer1(), matcher_result_layer2()]
         mock_ctrl.side_effect = [
-            {"continue": True, "reasoning": "More", "summary": "Layer 1 summary"},
+            ({"continue": True, "reasoning": "More", "summary": "Layer 1 summary"}, 20),
             controller_stop(),
         ]
 

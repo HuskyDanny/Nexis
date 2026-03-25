@@ -32,7 +32,7 @@ class TestRunController:
 
         from src.agents.thinking_crew import run_controller
 
-        result = run_controller(
+        result, tokens = run_controller(
             chain_summary="Fed raised rates.",
             effects=[
                 {"content": "Credit tightening", "confidence": 88},
@@ -69,7 +69,7 @@ class TestRunController:
 
         from src.agents.thinking_crew import run_controller
 
-        result = run_controller(
+        result, _tokens = run_controller(
             chain_summary="Previous summary.",
             effects=[{"content": "Weak effect", "confidence": 30}],
             matches=[],
@@ -83,7 +83,7 @@ class TestRunController:
         """When layer >= max_depth, stop without calling LLM."""
         from src.agents.thinking_crew import run_controller
 
-        result = run_controller(
+        result, tokens = run_controller(
             chain_summary="Summary.",
             effects=[{"content": "Effect", "confidence": 90}],
             matches=[],
@@ -96,12 +96,13 @@ class TestRunController:
             "max depth" in result["reasoning"].lower()
             or "maximum" in result["reasoning"].lower()
         )
+        assert tokens == 0
 
     def test_low_avg_confidence_forces_stop(self):
         """When average confidence is below threshold, stop without calling LLM."""
         from src.agents.thinking_crew import run_controller
 
-        result = run_controller(
+        result, tokens = run_controller(
             chain_summary="Summary.",
             effects=[
                 {"content": "E1", "confidence": 20},
@@ -115,12 +116,13 @@ class TestRunController:
 
         assert result["continue"] is False
         assert "confidence" in result["reasoning"].lower()
+        assert tokens == 0
 
     def test_no_effects_forces_stop(self):
         """When thinker produced no effects, stop without calling LLM."""
         from src.agents.thinking_crew import run_controller
 
-        result = run_controller(
+        result, tokens = run_controller(
             chain_summary="Summary.",
             effects=[],
             matches=[],
@@ -129,6 +131,7 @@ class TestRunController:
         )
 
         assert result["continue"] is False
+        assert tokens == 0
 
     @patch(f"{_TC}.Crew")
     @patch(f"{_TC}.get_main_llm")
@@ -138,7 +141,7 @@ class TestRunController:
 
         from src.agents.thinking_crew import run_controller
 
-        result = run_controller(
+        result, tokens = run_controller(
             chain_summary="Summary.",
             effects=[{"content": "Effect", "confidence": 80}],
             matches=[],
@@ -148,6 +151,7 @@ class TestRunController:
 
         assert result["continue"] is False
         assert "error" in result["reasoning"].lower()
+        assert tokens == 0
 
 
 class TestParseJsonResponse:
