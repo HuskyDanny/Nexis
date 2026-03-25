@@ -28,4 +28,4 @@ markers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "pytest-cov>=6.0", "httpx>=0.28", "deepeval>=2.0"]
+dev = ["deepeval>=2.0", "httpx>=0.28", "litellm>=1.0", "pytest>=8.0", "pytest-asyncio>=0.24", "pytest-cov>=6.0"]
