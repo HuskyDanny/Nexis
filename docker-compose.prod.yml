@@ -1,0 +1,21 @@
+# Production override — use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+services:
+  backend:
+    volumes: []  # No volume mounts in production
+    command: []  # Use Dockerfile CMD (uvicorn with --workers)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/live')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    volumes: []  # No volume mounts in production
+    command: []  # Use Dockerfile CMD (nginx)
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

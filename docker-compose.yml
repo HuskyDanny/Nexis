@@ -6,12 +6,16 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       MONGODB_URL: mongodb://mongodb:27017/financial_agent_v2
       REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: development
+    # Dev override: use reload mode
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   frontend:
     build: ./frontend
@@ -22,6 +26,8 @@ services:
       - /app/node_modules
     environment:
       - VITE_API_URL=http://backend:8000
+    # Dev override: use vite dev server
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
   mongodb:
     image: mongo:7.0
@@ -29,6 +35,11 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ping:1})", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7.2-alpine
@@ -36,6 +47,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   mongodb_data:
