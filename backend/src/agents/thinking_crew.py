@@ -23,6 +23,11 @@ from src.agents.thinking_helpers import (
     parse_json_response,
     prepare_parent_nodes,
 )
+from src.agents.thinking_models import (  # noqa: E402
+    ControllerOutput as ControllerOutputModel,
+    MatcherOutput,
+    ThinkerOutput,
+)
 from src.core.logger import get_logger
 
 log = get_logger("agents")
@@ -107,6 +112,7 @@ def run_thinker(
             description=description,
             expected_output="JSON object with 'effects' array.",
             agent=thinker,
+            output_json=ThinkerOutput,
         )
 
         crew = Crew(agents=[thinker], tasks=[think_task], verbose=_is_debug())
@@ -115,20 +121,18 @@ def run_thinker(
         elapsed = time.perf_counter() - t0
 
         tokens = (
-            result.token_usage.total_tokens
-            if hasattr(result, "token_usage") and result.token_usage
-            else 0
+            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
         )
 
-        raw = result.raw if hasattr(result, "raw") else str(result)
-        if _is_debug():
-            log.debug("THINKER L%d raw response: %s", layer, raw[:1000])
-
-        parsed = parse_json_response(raw)
+        # Prefer structured output_json; fall back to raw parsing
+        parsed = getattr(result, "json_dict", None)
+        if not parsed:
+            raw = result.raw if hasattr(result, "raw") else str(result)
+            if _is_debug():
+                log.debug("THINKER L%d raw response: %s", layer, raw[:1000])
+            parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Thinker JSON parse failed at layer %d", layer)
-            if _is_debug():
-                log.debug("Thinker L%d raw output: %s", layer, raw[:500])
             return [], [], [], [], tokens
 
         n_effects = len(parsed.get("effects", []))
@@ -295,6 +299,7 @@ def run_matcher(
             description=description,
             expected_output="JSON object with 'matches' array.",
             agent=matcher,
+            output_json=MatcherOutput,
         )
 
         crew = Crew(agents=[matcher], tasks=[match_task], verbose=_is_debug())
@@ -303,20 +308,18 @@ def run_matcher(
         elapsed = time.perf_counter() - t0
 
         tokens = (
-            result.token_usage.total_tokens
-            if hasattr(result, "token_usage") and result.token_usage
-            else 0
+            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
         )
 
-        raw = result.raw if hasattr(result, "raw") else str(result)
-        if _is_debug():
-            log.debug("MATCHER raw response: %s", raw[:1000])
-
-        parsed = parse_json_response(raw)
+        # Prefer structured output_json; fall back to raw parsing
+        parsed = getattr(result, "json_dict", None)
+        if not parsed:
+            raw = result.raw if hasattr(result, "raw") else str(result)
+            if _is_debug():
+                log.debug("MATCHER raw response: %s", raw[:1000])
+            parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Matcher JSON parse failed")
-            if _is_debug():
-                log.debug("MATCHER raw output: %s", raw[:500])
             return [], [], tokens
 
         n_parsed = len(parsed.get("matches", []))
@@ -479,6 +482,7 @@ def run_controller(
             description=description,
             expected_output="JSON with continue, reasoning, summary.",
             agent=controller,
+            output_json=ControllerOutputModel,
         )
 
         crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=_is_debug())
@@ -487,15 +491,16 @@ def run_controller(
         elapsed = time.perf_counter() - t0
 
         tokens = (
-            result.token_usage.total_tokens
-            if hasattr(result, "token_usage") and result.token_usage
-            else 0
+            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
         )
 
-        raw = result.raw if hasattr(result, "raw") else str(result)
-        if _is_debug():
-            log.debug("CONTROLLER L%d raw response: %s", layer, raw[:1000])
-        parsed = parse_json_response(raw)
+        # Prefer structured output_json; fall back to raw parsing
+        parsed = getattr(result, "json_dict", None)
+        if not parsed:
+            raw = result.raw if hasattr(result, "raw") else str(result)
+            if _is_debug():
+                log.debug("CONTROLLER L%d raw response: %s", layer, raw[:1000])
+            parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Controller JSON parse failed at layer %d", layer)
             return {
@@ -505,7 +510,7 @@ def run_controller(
             }, tokens
 
         ctrl_result = {
-            "continue": bool(parsed.get("continue", False)),
+            "continue": bool(parsed.get("continue", parsed.get("continue_decision", False))),
             "reasoning": parsed.get("reasoning", ""),
             "summary": parsed.get("summary", chain_summary),
         }
