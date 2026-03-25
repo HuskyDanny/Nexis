@@ -14,21 +14,23 @@ class TestRunMatcher:
     def test_empty_inputs_returns_empty(self):
         from src.agents.thinking_crew import run_matcher
 
-        nodes, edges = run_matcher(effects=[], value_pool=[])
+        nodes, edges, tokens = run_matcher(effects=[], value_pool=[])
         assert nodes == []
         assert edges == []
+        assert tokens == 0
 
     def test_empty_effects_returns_empty(self):
         from src.agents.thinking_crew import run_matcher
 
-        nodes, edges = run_matcher(effects=[], value_pool=[{"ticker": "AAPL"}])
+        nodes, edges, tokens = run_matcher(effects=[], value_pool=[{"ticker": "AAPL"}])
         assert nodes == []
         assert edges == []
+        assert tokens == 0
 
     def test_empty_value_pool_returns_empty(self):
         from src.agents.thinking_crew import run_matcher
 
-        nodes, edges = run_matcher(
+        nodes, edges, tokens = run_matcher(
             effects=[
                 {
                     "id": "e1",
@@ -43,6 +45,7 @@ class TestRunMatcher:
         )
         assert nodes == []
         assert edges == []
+        assert tokens == 0
 
     @patch(f"{_TC}.Crew")
     @patch(f"{_TC}.Task")
@@ -90,7 +93,7 @@ class TestRunMatcher:
             }
         ]
 
-        nodes, edges = run_matcher(effects=effects, value_pool=values)
+        nodes, edges, _tokens = run_matcher(effects=effects, value_pool=values)
 
         assert len(nodes) == 1
         node = nodes[0]
@@ -163,7 +166,7 @@ class TestRunMatcher:
         ]
         values = [{"ticker": "AAPL", "sector": "tech", "discount_pct": 15}]
 
-        nodes, edges = run_matcher(effects=effects, value_pool=values)
+        nodes, edges, _tokens = run_matcher(effects=effects, value_pool=values)
 
         # Both matches kept — no dedup!
         assert len(nodes) == 2
@@ -208,7 +211,7 @@ class TestRunMatcher:
         ]
         values = [{"ticker": "AAPL", "sector": "tech", "discount_pct": 15}]
 
-        nodes, edges = run_matcher(effects=effects, value_pool=values)
+        nodes, edges, _tokens = run_matcher(effects=effects, value_pool=values)
         assert len(nodes) == 0
 
     @patch(f"{_TC}.Crew")
@@ -231,6 +234,7 @@ class TestRunMatcher:
         ]
         values = [{"ticker": "AAPL", "sector": "tech", "discount_pct": 15}]
 
-        nodes, edges = run_matcher(effects=effects, value_pool=values)
+        nodes, edges, tokens = run_matcher(effects=effects, value_pool=values)
         assert nodes == []
         assert edges == []
+        assert tokens == 0

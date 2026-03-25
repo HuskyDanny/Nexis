@@ -32,6 +32,7 @@ class LayerResult:
     controller_decision: dict = field(
         default_factory=lambda: {"continue": False, "reasoning": "", "summary": ""}
     )
+    tokens_used: dict[str, int] = field(default_factory=dict)
 
 
 def _empty_layer_result(reason: str) -> LayerResult:
@@ -81,13 +82,16 @@ async def run_layer(
     - Controller fails -> default: continue if layer < 3, stop if >= 3
     """
     # --- Thinker ---
+    thinker_tokens = 0
     try:
-        effect_nodes, fetch_nodes, effect_edges, fetch_edges = await _call_with_retry(
-            run_thinker,
-            parent_nodes=parent_nodes,
-            chain_summary=chain_summary,
-            news_pool=news_pool,
-            layer=layer,
+        effect_nodes, fetch_nodes, effect_edges, fetch_edges, thinker_tokens = (
+            await _call_with_retry(
+                run_thinker,
+                parent_nodes=parent_nodes,
+                chain_summary=chain_summary,
+                news_pool=news_pool,
+                layer=layer,
+            )
         )
     except Exception as e:
         log.error("Thinker failed at layer %d: %s", layer, e)
@@ -101,8 +105,9 @@ async def run_layer(
 
     # --- Matcher ---
     opportunity_nodes: list[dict] = []
+    matcher_tokens = 0
     try:
-        opportunity_nodes, match_edges = await _call_with_retry(
+        opportunity_nodes, match_edges, matcher_tokens = await _call_with_retry(
             run_matcher,
             effects=effect_nodes,
             value_pool=value_pool,
@@ -114,8 +119,9 @@ async def run_layer(
         )
 
     # --- Controller ---
+    controller_tokens = 0
     try:
-        ctrl = await _call_with_retry(
+        ctrl, controller_tokens = await _call_with_retry(
             run_controller,
             chain_summary=chain_summary,
             effects=effect_nodes,
@@ -133,12 +139,18 @@ async def run_layer(
             "summary": chain_summary,
         }
 
+    tokens_used = {"thinker": thinker_tokens}
+    if opportunity_nodes:
+        tokens_used["matcher"] = matcher_tokens
+    tokens_used["controller"] = controller_tokens
+
     return LayerResult(
         effect_nodes=effect_nodes,
         fetch_nodes=fetch_nodes,
         opportunity_nodes=opportunity_nodes,
         all_edges=all_edges,
         controller_decision=ctrl,
+        tokens_used=tokens_used,
     )
 
 

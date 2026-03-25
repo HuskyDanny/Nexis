@@ -116,7 +116,7 @@ async def run_scenario_live(
                 input_summary=f"Layer {layer_num}: {len(parent_nodes)} parents, {len(scenario['news_pool'])} news",
                 output_raw=json.dumps(result.effect_nodes[:3], default=str),
                 skills_loaded=thinker_skills,
-                tokens_used=0,
+                tokens_used=result.tokens_used.get("thinker", 0),
                 latency_ms=elapsed_ms,
             ),
         ]
@@ -127,10 +127,12 @@ async def run_scenario_live(
                     input_summary=f"Layer {layer_num}: {len(result.effect_nodes)} effects",
                     output_raw=json.dumps(result.opportunity_nodes[:3], default=str),
                     skills_loaded=matcher_skills,
-                    tokens_used=0,
+                    tokens_used=result.tokens_used.get("matcher", 0),
                     latency_ms=0,
                 ),
             )
+
+        total_tokens += sum(result.tokens_used.values())
 
         layer_trace = LayerTrace(
             layer=layer_num,

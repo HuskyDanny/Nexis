@@ -14,13 +14,14 @@ class TestRunThinker:
     def test_empty_parents_returns_empty(self):
         from src.agents.thinking_crew import run_thinker
 
-        effects, fetches, eff_edges, fetch_edges = run_thinker(
+        effects, fetches, eff_edges, fetch_edges, tokens = run_thinker(
             parent_nodes=[], chain_summary="", news_pool=[], layer=1
         )
         assert effects == []
         assert fetches == []
         assert eff_edges == []
         assert fetch_edges == []
+        assert tokens == 0
 
     @patch(f"{_TC}.Crew")
     @patch(f"{_TC}.Task")
@@ -60,7 +61,7 @@ class TestRunThinker:
                 "metadata": {"sector": "macro"},
             }
         ]
-        effects, fetches, eff_edges, fetch_edges = run_thinker(
+        effects, fetches, eff_edges, fetch_edges, _tokens = run_thinker(
             parent_nodes=parents,
             chain_summary="Fed raised rates.",
             news_pool=[],
@@ -121,7 +122,7 @@ class TestRunThinker:
                 "metadata": {},
             }
         ]
-        effects, fetches, eff_edges, fetch_edges = run_thinker(
+        effects, fetches, eff_edges, fetch_edges, _tokens = run_thinker(
             parent_nodes=parents, chain_summary="", news_pool=[], layer=2
         )
 
@@ -174,7 +175,7 @@ class TestRunThinker:
             },
             {"id": "news-99", "title": "Unrelated news", "summary": "Not relevant"},
         ]
-        effects, fetches, eff_edges, fetch_edges = run_thinker(
+        effects, fetches, eff_edges, fetch_edges, _tokens = run_thinker(
             parent_nodes=parents, chain_summary="", news_pool=news_pool, layer=1
         )
 
@@ -223,7 +224,7 @@ class TestRunThinker:
                 "metadata": {},
             }
         ]
-        effects, _, eff_edges, _ = run_thinker(
+        effects, _, eff_edges, _, _tokens = run_thinker(
             parent_nodes=parents, chain_summary="", news_pool=[], layer=1
         )
 
@@ -247,13 +248,14 @@ class TestRunThinker:
                 "metadata": {},
             }
         ]
-        effects, fetches, eff_edges, fetch_edges = run_thinker(
+        effects, fetches, eff_edges, fetch_edges, tokens = run_thinker(
             parent_nodes=parents, chain_summary="", news_pool=[], layer=1
         )
         assert effects == []
         assert fetches == []
         assert eff_edges == []
         assert fetch_edges == []
+        assert tokens == 0
 
     @patch(f"{_TC}.Crew")
     @patch(f"{_TC}.Task")
@@ -282,7 +284,7 @@ class TestRunThinker:
                 "metadata": {},
             }
         ]
-        effects, _, _, _ = run_thinker(
+        effects, _, _, _, _tokens = run_thinker(
             parent_nodes=parents, chain_summary="", news_pool=[], layer=1
         )
         assert len(effects) == 1
@@ -326,7 +328,7 @@ class TestRunThinker:
                 "metadata": {},
             }
         ]
-        effects, _, _, _ = run_thinker(
+        effects, _, _, _, _tokens = run_thinker(
             parent_nodes=parents, chain_summary="", news_pool=[], layer=1
         )
 
