@@ -127,7 +127,9 @@ def run_thinker(
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
         if not parsed:
-            raw = result.raw if hasattr(result, "raw") else str(result)
+            raw = getattr(result, "raw", None)
+            if raw is None:
+                raw = str(result)
             if _is_debug():
                 log.debug("THINKER L%d raw response: %s", layer, raw[:1000])
             parsed = parse_json_response(raw)
@@ -314,7 +316,9 @@ def run_matcher(
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
         if not parsed:
-            raw = result.raw if hasattr(result, "raw") else str(result)
+            raw = getattr(result, "raw", None)
+            if raw is None:
+                raw = str(result)
             if _is_debug():
                 log.debug("MATCHER raw response: %s", raw[:1000])
             parsed = parse_json_response(raw)
@@ -497,7 +501,9 @@ def run_controller(
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
         if not parsed:
-            raw = result.raw if hasattr(result, "raw") else str(result)
+            raw = getattr(result, "raw", None)
+            if raw is None:
+                raw = str(result)
             if _is_debug():
                 log.debug("CONTROLLER L%d raw response: %s", layer, raw[:1000])
             parsed = parse_json_response(raw)

@@ -12,14 +12,14 @@ class Effect(BaseModel):
     content: str
     reasoning: str
     confidence: int = 50
-    parent_ids: list[str] = []
+    parent_ids: list[str] = Field(default_factory=list)
     sector: str = ""
-    fetched_news_ids: list[str] = []
-    information_gaps: list[str] = []
+    fetched_news_ids: list[str] = Field(default_factory=list)
+    information_gaps: list[str] = Field(default_factory=list)
 
 
 class ThinkerOutput(BaseModel):
-    effects: list[Effect] = []
+    effects: list[Effect] = Field(default_factory=list)
 
 
 class Match(BaseModel):
@@ -31,7 +31,7 @@ class Match(BaseModel):
 
 
 class MatcherOutput(BaseModel):
-    matches: list[Match] = []
+    matches: list[Match] = Field(default_factory=list)
 
 
 class ControllerOutput(BaseModel):
