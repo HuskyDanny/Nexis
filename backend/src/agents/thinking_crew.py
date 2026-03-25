@@ -229,6 +229,12 @@ def run_matcher(
         )
 
         crew = Crew(agents=[matcher], tasks=[match_task], verbose=debug)
+        if debug:
+            log.debug(
+                "MATCHER prompt (%d chars): %s",
+                len(prompt_desc),
+                prompt_desc[:500] if len(prompt_desc) > 500 else prompt_desc,
+            )
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
@@ -350,6 +356,13 @@ def run_controller(
         )
 
         crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=debug)
+        if debug:
+            log.debug(
+                "CONTROLLER L%d prompt (%d chars): %s",
+                layer,
+                len(prompt_desc),
+                prompt_desc[:500] if len(prompt_desc) > 500 else prompt_desc,
+            )
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
