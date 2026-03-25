@@ -1,6 +1,9 @@
 """Three-agent thinking pipeline: Thinker, Matcher, Controller."""
 
 import json
+import logging
+import os
+import time
 from uuid import uuid4
 
 from crewai import Agent, Crew, Task
@@ -20,7 +23,17 @@ from src.core.logger import get_logger
 
 log = get_logger("agents")
 
-_parse_json_response = parse_json_response  # noqa: F841 — re-export
+
+def _is_debug() -> bool:
+    return os.environ.get("LOG_LEVEL", "").upper() == "DEBUG"
+
+
+def _crewai_verbose() -> bool:
+    return _is_debug()
+
+
+# Re-export for backward compat and test access
+_parse_json_response = parse_json_response  # noqa: F841
 _prepare_parent_nodes = prepare_parent_nodes
 
 
@@ -46,14 +59,12 @@ def run_thinker(
             backstory=system_prompt,
             llm=get_main_llm(),
             tools=[FetchNewsTool()],
-            verbose=False,
         )
 
         parents_json = json.dumps(
             _prepare_parent_nodes(parent_nodes, current_layer=layer),
             ensure_ascii=False,
         )
-
         pool_json = json.dumps(
             [
                 {
@@ -65,38 +76,40 @@ def run_thinker(
             ],
             ensure_ascii=False,
         )
-
         chain_ctx = (
             f"Chain summary so far:\n{chain_summary}\n\n" if chain_summary else ""
         )
-
+        description = (
+            f"{chain_ctx}"
+            f"Analyze these financial events and identify their next-order "
+            f"market effects.\n\n"
+            f"Parent nodes (layers 0-{layer - 1}):\n{parents_json}\n\n"
+            f"Available news pool:\n{pool_json}\n\n"
+            f"For each effect:\n"
+            f"1. Content — what happens\n"
+            f"2. Reasoning — the causal chain from parent(s)\n"
+            f"3. Confidence (0-100) — naturally lower for deeper chains\n"
+            f"4. Parent IDs — which parent(s) cause it\n"
+            f"5. Sector — affected sector\n"
+            f"6. Fetched news IDs — any news from pool you reference\n"
+            f"7. Information gaps — what you wish you knew\n\n"
+            f"Return JSON:\n"
+            f'{{"effects": [{{"content": str, "reasoning": str, '
+            f'"confidence": int, "parent_ids": [str], "sector": str, '
+            f'"fetched_news_ids": [str], "information_gaps": [str]}}]}}\n\n'
+            f"Return ONLY valid JSON."
+        )
+        prompt_chars = len(description)
         think_task = Task(
-            description=(
-                f"{chain_ctx}"
-                f"Analyze these financial events and identify their next-order "
-                f"market effects.\n\n"
-                f"Parent nodes (layers 0-{layer - 1}):\n{parents_json}\n\n"
-                f"Available news pool:\n{pool_json}\n\n"
-                f"For each effect:\n"
-                f"1. Content — what happens\n"
-                f"2. Reasoning — the causal chain from parent(s)\n"
-                f"3. Confidence (0-100) — naturally lower for deeper chains\n"
-                f"4. Parent IDs — which parent(s) cause it\n"
-                f"5. Sector — affected sector\n"
-                f"6. Fetched news IDs — any news from pool you reference\n"
-                f"7. Information gaps — what you wish you knew\n\n"
-                f"Return JSON:\n"
-                f'{{"effects": [{{"content": str, "reasoning": str, '
-                f'"confidence": int, "parent_ids": [str], "sector": str, '
-                f'"fetched_news_ids": [str], "information_gaps": [str]}}]}}\n\n'
-                f"Return ONLY valid JSON."
-            ),
+            description=description,
             expected_output="JSON object with 'effects' array.",
             agent=thinker,
         )
 
-        crew = Crew(agents=[thinker], tasks=[think_task], verbose=False)
+        crew = Crew(agents=[thinker], tasks=[think_task], verbose=_crewai_verbose())
+        t0 = time.perf_counter()
         result = crew.kickoff()
+        elapsed = time.perf_counter() - t0
 
         tokens = (
             result.token_usage.total_tokens
@@ -105,6 +118,9 @@ def run_thinker(
         )
 
         raw = result.raw if hasattr(result, "raw") else str(result)
+        if _is_debug():
+            log.debug("THINKER L%d raw response: %s", layer, raw[:1000])
+
         parsed = parse_json_response(raw)
         if parsed is None:
             log.warning(
@@ -114,8 +130,20 @@ def run_thinker(
             )
             return [], [], [], [], tokens
 
+        n_effects = len(parsed.get("effects", []))
         effect_nodes, fetch_nodes, effect_edges, fetch_edges = _build_thinker_output(
             parsed.get("effects", []), parent_nodes, news_pool, layer
+        )
+        n_fetch = len(fetch_nodes)
+        log.info(
+            "THINKER L%d | skills=%d | %.1fs | parsed=%d effects, %d fetch | prompt=%d chars | tokens=%d",
+            layer,
+            len(THINKER_SKILLS),
+            elapsed,
+            n_effects,
+            n_fetch,
+            prompt_chars,
+            tokens,
         )
         return effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens
 
@@ -173,7 +201,6 @@ def _build_thinker_output(
                 }
             )
 
-        # Handle fetched news references
         for fetched_id in effect.get("fetched_news_ids", []):
             if fetched_id in existing_ids:
                 continue
@@ -206,13 +233,6 @@ def _build_thinker_output(
                 )
                 existing_ids.add(fetched_id)
 
-    log.info(
-        "Thinker layer %d: %d effects, %d fetches from %d parents",
-        layer,
-        len(effect_nodes),
-        len(fetch_nodes),
-        len(parent_nodes),
-    )
     return effect_nodes, fetch_nodes, effect_edges, fetch_edges
 
 
@@ -232,9 +252,7 @@ def run_matcher(
             goal="Match market effects to undervalued stocks",
             backstory=system_prompt,
             llm=get_main_llm(),
-            verbose=False,
         )
-
         effects_json = json.dumps(
             [
                 {
@@ -247,7 +265,6 @@ def run_matcher(
             ],
             ensure_ascii=False,
         )
-
         values_json = json.dumps(
             [
                 {
@@ -260,29 +277,32 @@ def run_matcher(
             ],
             ensure_ascii=False,
         )
-
+        description = (
+            f"Match these market effects to value stocks that benefit.\n\n"
+            f"Effects:\n{effects_json}\n\n"
+            f"Value stocks:\n{values_json}\n\n"
+            f"For each match:\n"
+            f"1. Which effect benefits the stock (effect_id)\n"
+            f"2. sentiment_score (0-100): how positive for this stock\n"
+            f"3. agreement_score (0-100): confidence in this match\n"
+            f"4. Reasoning\n\n"
+            f"Return JSON:\n"
+            f'{{"matches": [{{"ticker": str, "effect_id": str, '
+            f'"sentiment_score": float, "agreement_score": float, '
+            f'"reasoning": str}}]}}\n\n'
+            f"Only include high-confidence matches. Return ONLY valid JSON."
+        )
+        prompt_chars = len(description)
         match_task = Task(
-            description=(
-                f"Match these market effects to value stocks that benefit.\n\n"
-                f"Effects:\n{effects_json}\n\n"
-                f"Value stocks:\n{values_json}\n\n"
-                f"For each match:\n"
-                f"1. Which effect benefits the stock (effect_id)\n"
-                f"2. sentiment_score (0-100): how positive for this stock\n"
-                f"3. agreement_score (0-100): confidence in this match\n"
-                f"4. Reasoning\n\n"
-                f"Return JSON:\n"
-                f'{{"matches": [{{"ticker": str, "effect_id": str, '
-                f'"sentiment_score": float, "agreement_score": float, '
-                f'"reasoning": str}}]}}\n\n'
-                f"Only include high-confidence matches. Return ONLY valid JSON."
-            ),
+            description=description,
             expected_output="JSON object with 'matches' array.",
             agent=matcher,
         )
 
-        crew = Crew(agents=[matcher], tasks=[match_task], verbose=False)
+        crew = Crew(agents=[matcher], tasks=[match_task], verbose=_crewai_verbose())
+        t0 = time.perf_counter()
         result = crew.kickoff()
+        elapsed = time.perf_counter() - t0
 
         tokens = (
             result.token_usage.total_tokens
@@ -299,6 +319,15 @@ def run_matcher(
         opp_nodes, edges = _build_matcher_output(
             parsed.get("matches", []), effects, value_pool
         )
+        n_opps = len(opp_nodes)
+        log.info(
+            "MATCHER | skills=%d | %.1fs | parsed=%d opportunities | prompt=%d chars | tokens=%d",
+            len(MATCHER_SKILLS),
+            elapsed,
+            n_opps,
+            prompt_chars,
+            tokens,
+        )
         return opp_nodes, edges, tokens
 
     except Exception as e:
@@ -314,14 +343,12 @@ def _build_matcher_output(
     """Construct opportunity nodes and edges from parsed matcher output."""
     effect_map = {e.get("id", ""): e for e in effects}
     value_map = {v.get("ticker", ""): v for v in value_pool}
-
     opportunity_nodes: list[dict] = []
     new_edges: list[dict] = []
 
     for match in matches:
         ticker = match.get("ticker", "")
         effect_id = match.get("effect_id", "")
-
         if effect_id not in effect_map:
             continue
         val = value_map.get(ticker, {})
@@ -330,7 +357,6 @@ def _build_matcher_output(
 
         parent_effect = effect_map[effect_id]
         opp_layer = parent_effect.get("layer", 1)
-
         sentiment = match.get("sentiment_score", 50.0)
         discount = val.get("discount_pct", 0)
         agreement = match.get("agreement_score", 50.0)
@@ -342,7 +368,7 @@ def _build_matcher_output(
                 "id": opp_id,
                 "layer": opp_layer,
                 "type": "opportunity",
-                "content": f"{ticker} \u2014 {score}% conviction",
+                "content": f"{ticker} — {score}% conviction",
                 "reasoning": match.get("reasoning", ""),
                 "confidence": score,
                 "sources": [],
@@ -360,12 +386,6 @@ def _build_matcher_output(
             {"source": effect_id, "target": opp_id, "relationship": "matches"}
         )
 
-    log.info(
-        "Matcher: %d opportunities from %d effects x %d values",
-        len(opportunity_nodes),
-        len(effects),
-        len(value_pool),
-    )
     return opportunity_nodes, new_edges
 
 
@@ -377,7 +397,10 @@ def run_controller(
     max_depth: int,
     confidence_threshold: float = CONFIDENCE_THRESHOLD,
 ) -> tuple[dict, int]:
-    """Evaluate reasoning quality and decide whether to continue."""
+    """Evaluate reasoning quality and decide whether to continue.
+
+    Returns ({"continue": bool, "reasoning": str, "summary": str}, tokens).
+    """
     # Deterministic stops — no LLM needed
     if not effects:
         return {
@@ -418,9 +441,7 @@ def run_controller(
                 "chain has reached diminishing returns."
             ),
             llm=get_main_llm(),
-            verbose=False,
         )
-
         effects_json = json.dumps(
             [
                 {"content": e.get("content", ""), "confidence": e.get("confidence", 0)}
@@ -428,14 +449,12 @@ def run_controller(
             ],
             ensure_ascii=False,
         )
-
         match_count = len(matches)
         avg_score = (
             sum(m.get("convergence_score", 0) for m in matches) / match_count
             if match_count
             else 0
         )
-
         ctrl_task = Task(
             description=(
                 f"Evaluate this thinking chain and decide: continue or stop?\n\n"
@@ -457,8 +476,10 @@ def run_controller(
             agent=controller,
         )
 
-        crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=False)
+        crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=_crewai_verbose())
+        t0 = time.perf_counter()
         result = crew.kickoff()
+        elapsed = time.perf_counter() - t0
 
         tokens = (
             result.token_usage.total_tokens
@@ -476,11 +497,20 @@ def run_controller(
                 "summary": chain_summary,
             }, tokens
 
-        return {
+        ctrl_result = {
             "continue": bool(parsed.get("continue", False)),
             "reasoning": parsed.get("reasoning", ""),
             "summary": parsed.get("summary", chain_summary),
-        }, tokens
+        }
+        log.info(
+            'CONTROLLER L%d | %.1fs | continue=%s | tokens=%d | summary="%s"',
+            layer,
+            elapsed,
+            ctrl_result["continue"],
+            tokens,
+            ctrl_result["summary"][:80],
+        )
+        return ctrl_result, tokens
 
     except Exception as e:
         log.error("run_controller failed at layer %d: %s", layer, e)
