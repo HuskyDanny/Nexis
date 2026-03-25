@@ -136,7 +136,8 @@ def build_thinker_output(
     layer: int,
 ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     """Construct nodes and edges from parsed thinker effects."""
-    existing_ids = {n.get("id", "") for n in parent_nodes}
+    parent_ids_set = {n.get("id", "") for n in parent_nodes}
+    seen_fetched_news: set[str] = set()
     effect_nodes: list[dict] = []
     fetch_nodes: list[dict] = []
     effect_edges: list[dict] = []
@@ -145,7 +146,7 @@ def build_thinker_output(
     for effect in effects:
         effect_id = uuid4().hex[:12]
         parent_ids = [
-            pid for pid in effect.get("parent_ids", []) if pid in existing_ids
+            pid for pid in effect.get("parent_ids", []) if pid in parent_ids_set
         ]
         if not parent_ids:
             parent_ids = [parent_nodes[0]["id"]]
@@ -180,7 +181,7 @@ def build_thinker_output(
 
         # Handle fetched news references
         for fetched_id in effect.get("fetched_news_ids", []):
-            if fetched_id in existing_ids:
+            if fetched_id in seen_fetched_news:
                 continue
             fetched_item = next(
                 (n for n in news_pool if n.get("id") == fetched_id), None
@@ -209,7 +210,7 @@ def build_thinker_output(
                         "relationship": "fetched_for",
                     }
                 )
-                existing_ids.add(fetched_id)
+                seen_fetched_news.add(fetched_id)
 
     return effect_nodes, fetch_nodes, effect_edges, fetch_edges
 

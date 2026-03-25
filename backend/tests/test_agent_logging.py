@@ -8,6 +8,7 @@ Covers:
 
 import json
 import logging
+import re
 from unittest.mock import MagicMock, patch
 
 from tests.helpers_thinking_agents import mock_crew_result
@@ -75,7 +76,7 @@ class TestThinkerLogging:
         msg = thinker_logs[0].message
         assert "L1" in msg, "Should contain layer number"
         assert "skills=" in msg, "Should contain skills count"
-        assert "s" in msg, "Should contain latency in seconds"
+        assert re.search(r"\d+(\.\d+)?s", msg), "Should contain latency in seconds"
         assert "parsed=" in msg, "Should contain parsed results count"
         assert "prompt=" in msg, "Should contain prompt size"
 
@@ -196,7 +197,7 @@ class TestMatcherLogging:
 
         msg = matcher_logs[0].message
         assert "skills=" in msg, "Should contain skills count"
-        assert "s" in msg, "Should contain latency"
+        assert re.search(r"\d+(\.\d+)?s", msg), "Should contain latency"
         assert "parsed=" in msg, "Should contain parsed count"
         assert "prompt=" in msg, "Should contain prompt size"
 
@@ -247,7 +248,7 @@ class TestControllerLogging:
 
         msg = ctrl_logs[0].message
         assert "L1" in msg, "Should contain layer number"
-        assert "s" in msg, "Should contain latency"
+        assert re.search(r"\d+(\.\d+)?s", msg), "Should contain latency"
         assert "continue=" in msg, "Should contain continue decision"
 
     def test_controller_deterministic_stop_no_llm_log(self, caplog):
@@ -310,6 +311,7 @@ class TestCrewVerboseToggle:
         ]
 
         with patch.dict("os.environ", {"LOG_LEVEL": "INFO"}):
+            logging.getLogger(_LOGGER).setLevel(logging.INFO)
             run_thinker(parent_nodes=parents, chain_summary="", news_pool=[], layer=1)
 
         # Check Crew was called with verbose=False
@@ -358,6 +360,7 @@ class TestCrewVerboseToggle:
         ]
 
         with patch.dict("os.environ", {"LOG_LEVEL": "DEBUG"}):
+            logging.getLogger(_LOGGER).setLevel(logging.DEBUG)
             run_thinker(parent_nodes=parents, chain_summary="", news_pool=[], layer=1)
 
         # Check Crew was called with verbose=True

@@ -6,7 +6,6 @@ Re-exports: convergence_score(), _parse_json_response().
 
 import json
 import logging
-import os
 import time
 
 from crewai import Agent, Crew, Task
@@ -14,6 +13,7 @@ from crewai import Agent, Crew, Task
 from src.agents.llm_config import get_main_llm
 from src.agents.skills.base import build_system_prompt_with_skills
 from src.agents.tools.fetch_news import FetchNewsTool
+from src.core.logger import get_logger
 from src.agents.thinking_helpers import (
     CONFIDENCE_THRESHOLD,
     MATCHER_SKILLS,
@@ -25,12 +25,12 @@ from src.agents.thinking_helpers import (
     prepare_parent_nodes,
 )
 
-log = logging.getLogger("nexis.agents")
+log = get_logger("agents")
 
 
 def _is_debug() -> bool:
-    """Check if LOG_LEVEL is DEBUG."""
-    return os.environ.get("LOG_LEVEL", "INFO").upper() == "DEBUG"
+    """Check if logger is in DEBUG mode."""
+    return log.isEnabledFor(logging.DEBUG)
 
 
 # Re-export for backward compat and test access
@@ -113,9 +113,16 @@ def run_thinker(
         )
 
         crew = Crew(agents=[thinker], tasks=[think_task], verbose=debug)
-        t0 = time.time()
+        if _is_debug():
+            log.debug(
+                "THINKER L%d prompt (%d chars): %s",
+                layer,
+                len(prompt_desc),
+                prompt_desc[:500] if len(prompt_desc) > 500 else prompt_desc,
+            )
+        t0 = time.perf_counter()
         result = crew.kickoff()
-        elapsed = time.time() - t0
+        elapsed = time.perf_counter() - t0
 
         raw = result.raw if hasattr(result, "raw") else str(result)
         log.debug("THINKER L%d raw response: %s", layer, raw)
@@ -142,8 +149,8 @@ def run_thinker(
 
         return build_thinker_output(effects, parent_nodes, news_pool, layer)
 
-    except Exception as e:
-        log.error("run_thinker failed at layer %d: %s", layer, e)
+    except Exception:
+        log.exception("run_thinker failed at layer %d", layer)
         return [], [], [], []
 
 
@@ -222,9 +229,9 @@ def run_matcher(
         )
 
         crew = Crew(agents=[matcher], tasks=[match_task], verbose=debug)
-        t0 = time.time()
+        t0 = time.perf_counter()
         result = crew.kickoff()
-        elapsed = time.time() - t0
+        elapsed = time.perf_counter() - t0
 
         raw = result.raw if hasattr(result, "raw") else str(result)
         log.debug("MATCHER raw response: %s", raw)
@@ -243,8 +250,8 @@ def run_matcher(
         )
         return build_matcher_output(matches, effects, value_pool)
 
-    except Exception as e:
-        log.error("run_matcher failed: %s", e)
+    except Exception:
+        log.exception("run_matcher failed")
         return [], []
 
 
@@ -343,9 +350,9 @@ def run_controller(
         )
 
         crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=debug)
-        t0 = time.time()
+        t0 = time.perf_counter()
         result = crew.kickoff()
-        elapsed = time.time() - t0
+        elapsed = time.perf_counter() - t0
 
         raw = result.raw if hasattr(result, "raw") else str(result)
         log.debug("CONTROLLER L%d raw response: %s", layer, raw)
@@ -373,10 +380,10 @@ def run_controller(
             "summary": parsed.get("summary", chain_summary),
         }
 
-    except Exception as e:
-        log.error("run_controller failed at layer %d: %s", layer, e)
+    except Exception:
+        log.exception("run_controller failed at layer %d", layer)
         return {
             "continue": False,
-            "reasoning": f"Error in controller: {e}",
+            "reasoning": "Error in controller — see logs for traceback.",
             "summary": chain_summary,
         }
