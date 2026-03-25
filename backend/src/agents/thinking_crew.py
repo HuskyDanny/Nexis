@@ -128,7 +128,8 @@ def run_thinker(
         parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Thinker JSON parse failed at layer %d", layer)
-            log.debug("Thinker L%d raw output: %s", layer, raw[:500])
+            if _is_debug():
+                log.debug("Thinker L%d raw output: %s", layer, raw[:500])
             return [], [], [], [], tokens
 
         n_effects = len(parsed.get("effects", []))
@@ -491,7 +492,8 @@ def run_controller(
         )
 
         raw = result.raw if hasattr(result, "raw") else str(result)
-        log.debug("CONTROLLER L%d raw response: %s", layer, raw[:1000])
+        if _is_debug():
+            log.debug("CONTROLLER L%d raw response: %s", layer, raw[:1000])
         parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Controller JSON parse failed at layer %d", layer)
