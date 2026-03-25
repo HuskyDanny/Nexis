@@ -30,7 +30,7 @@ async def readiness(response: Response):
         log.warning("MongoDB health check timed out")
         checks["mongodb"] = "error: timeout"
     except Exception:
-        log.warning("MongoDB health check failed")
+        log.warning("MongoDB health check failed", exc_info=True)
         checks["mongodb"] = "error: not connected"
 
     # Redis check with 2s timeout
@@ -43,7 +43,7 @@ async def readiness(response: Response):
         log.warning("Redis health check timed out")
         checks["redis"] = "error: timeout"
     except Exception:
-        log.warning("Redis health check failed")
+        log.warning("Redis health check failed", exc_info=True)
         checks["redis"] = "error: not connected"
 
     all_ok = all(v == "ok" for v in checks.values())
