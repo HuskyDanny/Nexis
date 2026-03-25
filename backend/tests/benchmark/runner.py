@@ -108,7 +108,7 @@ async def run_scenario_live(
         from src.agents.thinking_helpers import THINKER_SKILLS, MATCHER_SKILLS
 
         thinker_skills = [s for s in THINKER_SKILLS]
-        matcher_skills = [s for s in MATCHER_SKILLS] if result.opportunity_nodes else []
+        matcher_skills = [s for s in MATCHER_SKILLS]
 
         agent_traces = [
             AgentTrace(
@@ -119,19 +119,14 @@ async def run_scenario_live(
                 tokens_used=result.tokens_used.get("thinker", 0),
                 latency_ms=elapsed_ms,
             ),
-        ]
-        if result.opportunity_nodes:
-            agent_traces.append(
-                AgentTrace(
-                    agent="matcher",
-                    input_summary=f"Layer {layer_num}: {len(result.effect_nodes)} effects",
-                    output_raw=json.dumps(result.opportunity_nodes[:3], default=str),
-                    skills_loaded=matcher_skills,
-                    tokens_used=result.tokens_used.get("matcher", 0),
-                    latency_ms=0,
-                ),
-            )
-        agent_traces.append(
+            AgentTrace(
+                agent="matcher",
+                input_summary=f"Layer {layer_num}: {len(result.effect_nodes)} effects",
+                output_raw=json.dumps(result.opportunity_nodes[:3], default=str),
+                skills_loaded=matcher_skills,
+                tokens_used=result.tokens_used.get("matcher", 0),
+                latency_ms=0,
+            ),
             AgentTrace(
                 agent="controller",
                 input_summary=f"Layer {layer_num}: {len(result.effect_nodes)} effects, {len(result.opportunity_nodes)} matches",
@@ -140,7 +135,7 @@ async def run_scenario_live(
                 tokens_used=result.tokens_used.get("controller", 0),
                 latency_ms=0,
             ),
-        )
+        ]
 
         total_tokens += sum(result.tokens_used.values())
 

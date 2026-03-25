@@ -10,6 +10,7 @@ No mock fallback. If LLM is down, pipeline returns empty/partial results.
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Optional
 
 from src.agents.thinking_crew import run_controller, run_matcher, run_thinker
 from src.core.logger import get_logger
@@ -35,14 +36,17 @@ class LayerResult:
     tokens_used: dict[str, int] = field(default_factory=dict)
 
 
-def _empty_layer_result(reason: str) -> LayerResult:
+def _empty_layer_result(
+    reason: str, tokens_used: Optional[dict[str, int]] = None
+) -> LayerResult:
     """Return an empty LayerResult that signals stop."""
     return LayerResult(
         controller_decision={
             "continue": False,
             "reasoning": reason,
             "summary": "",
-        }
+        },
+        tokens_used=tokens_used or {},
     )
 
 
@@ -95,11 +99,11 @@ async def run_layer(
         )
     except Exception as e:
         log.error("Thinker failed at layer %d: %s", layer, e)
-        return _empty_layer_result(f"Thinker failed: {e}")
+        return _empty_layer_result(f"Thinker failed: {e}", {"thinker": thinker_tokens})
 
     if not effect_nodes:
         log.info("Thinker produced no effects at layer %d", layer)
-        return _empty_layer_result("Thinker produced no effects")
+        return _empty_layer_result("Thinker produced no effects", {"thinker": thinker_tokens})
 
     all_edges = list(effect_edges) + list(fetch_edges)
 
@@ -139,10 +143,11 @@ async def run_layer(
             "summary": chain_summary,
         }
 
-    tokens_used = {"thinker": thinker_tokens}
-    if opportunity_nodes:
-        tokens_used["matcher"] = matcher_tokens
-    tokens_used["controller"] = controller_tokens
+    tokens_used = {
+        "thinker": thinker_tokens,
+        "matcher": matcher_tokens,
+        "controller": controller_tokens,
+    }
 
     return LayerResult(
         effect_nodes=effect_nodes,

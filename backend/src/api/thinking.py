@@ -384,7 +384,7 @@ async def match_values(session_id: str):
     from src.agents.thinking_crew import run_matcher
 
     loop = asyncio.get_running_loop()
-    opportunities, match_edges = await loop.run_in_executor(
+    opportunities, match_edges, _tokens = await loop.run_in_executor(
         None, lambda: run_matcher(final_effects, value_pool)
     )
 
