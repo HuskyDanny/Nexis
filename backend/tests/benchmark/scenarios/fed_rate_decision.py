@@ -1,12 +1,15 @@
 """
 Fed Rate Decision benchmark scenario.
 
-Causal chain:
-  Fed holds rates steady amid cooling inflation + strong labor market
-  → yield curve steepens (long rates rise, short rates anchored)
-  → housing market softens (mortgage rates stay elevated)
-  → REITs recover (rate stability = predictable cash flows)
-  → regional bank earnings improve (net interest margin expands)
+Causal chain (3 layers):
+  L1 — Monetary policy trigger:
+       Fed holds rates steady amid cooling inflation + strong labor market.
+  L2 — Bond & housing market impact:
+       Yield curve steepens (long rates rise, short rates anchored);
+       mortgage rates stay elevated, cooling housing demand.
+  L3 — Sector rotation consequences:
+       REITs recover (rate stability = predictable cash flows);
+       regional bank earnings improve (net interest margin expands).
 
 Expected trades: TLT short (L2), VNQ long (L3), KRE long (L3)
 """

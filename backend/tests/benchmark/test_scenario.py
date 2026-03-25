@@ -57,8 +57,8 @@ class TestNewsPool:
     def test_news_summaries_are_multi_sentence(self, scenario):
         for item in scenario["news_pool"]:
             assert (
-                item["summary"].count(".") >= 1
-            ), f"News item {item.get('id')} summary appears too short"
+                item["summary"].count(".") >= 2
+            ), f"News item {item.get('id')} summary appears to be single-sentence"
 
     def test_news_tickers_is_list(self, scenario):
         for item in scenario["news_pool"]:
