@@ -1,8 +1,12 @@
-"""Three-agent thinking pipeline: Thinker, Matcher, Controller."""
+"""Three-agent thinking pipeline: Thinker, Matcher, Controller.
+
+Each function creates a specialized CrewAI agent, kicks off a crew,
+parses the JSON response, and constructs graph nodes/edges.
+Re-exported from thinking_helpers: convergence_score(), _parse_json_response()
+"""
 
 import json
 import logging
-import os
 import time
 from uuid import uuid4
 
@@ -25,7 +29,7 @@ log = get_logger("agents")
 
 
 def _is_debug() -> bool:
-    return os.environ.get("LOG_LEVEL", "").upper() == "DEBUG"
+    return log.isEnabledFor(logging.DEBUG)
 
 
 def _crewai_verbose() -> bool:
@@ -123,11 +127,8 @@ def run_thinker(
 
         parsed = parse_json_response(raw)
         if parsed is None:
-            log.warning(
-                "Thinker JSON parse failed at layer %d. Raw[0:500]: %s",
-                layer,
-                raw[:500],
-            )
+            log.warning("Thinker JSON parse failed at layer %d", layer)
+            log.debug("Thinker L%d raw output: %s", layer, raw[:500])
             return [], [], [], [], tokens
 
         n_effects = len(parsed.get("effects", []))
@@ -316,15 +317,17 @@ def run_matcher(
             log.warning("Matcher JSON parse failed")
             return [], [], tokens
 
+        n_parsed = len(parsed.get("matches", []))
         opp_nodes, edges = _build_matcher_output(
             parsed.get("matches", []), effects, value_pool
         )
-        n_opps = len(opp_nodes)
+        n_built = len(opp_nodes)
         log.info(
-            "MATCHER | skills=%d | %.1fs | parsed=%d opportunities | prompt=%d chars | tokens=%d",
+            "MATCHER | skills=%d | %.1fs | parsed=%d, built=%d opportunities | prompt=%d chars | tokens=%d",
             len(MATCHER_SKILLS),
             elapsed,
-            n_opps,
+            n_parsed,
+            n_built,
             prompt_chars,
             tokens,
         )
@@ -488,6 +491,7 @@ def run_controller(
         )
 
         raw = result.raw if hasattr(result, "raw") else str(result)
+        log.debug("CONTROLLER L%d raw response: %s", layer, raw[:1000])
         parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Controller JSON parse failed at layer %d", layer)
@@ -502,13 +506,10 @@ def run_controller(
             "reasoning": parsed.get("reasoning", ""),
             "summary": parsed.get("summary", chain_summary),
         }
+        _s = str(ctrl_result["summary"]).replace("\n", " ").replace("\r", " ").replace('"', '\\"')[:80]
         log.info(
             'CONTROLLER L%d | %.1fs | continue=%s | tokens=%d | summary="%s"',
-            layer,
-            elapsed,
-            ctrl_result["continue"],
-            tokens,
-            ctrl_result["summary"][:80],
+            layer, elapsed, ctrl_result["continue"], tokens, _s,
         )
         return ctrl_result, tokens
 
