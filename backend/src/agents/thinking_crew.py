@@ -1,7 +1,6 @@
 """Three-agent thinking pipeline: Thinker, Matcher, Controller."""
 
 import json
-import logging
 from uuid import uuid4
 
 from crewai import Agent, Crew, Task
@@ -17,8 +16,9 @@ from src.agents.thinking_helpers import (
     parse_json_response,
     prepare_parent_nodes,
 )
+from src.core.logger import get_logger
 
-log = logging.getLogger("nexis.agents")
+log = get_logger("agents")
 
 _parse_json_response = parse_json_response  # noqa: F841 — re-export
 _prepare_parent_nodes = prepare_parent_nodes
@@ -32,12 +32,12 @@ def run_thinker(
 ) -> tuple[list[dict], list[dict], list[dict], list[dict], int]:
     """Trace causal effects one layer deeper.
 
-    Returns:
-        (effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens)
+    Returns (effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens).
     """
     if not parent_nodes:
         return [], [], [], [], 0
 
+    tokens = 0
     try:
         system_prompt = build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
         thinker = Agent(
@@ -121,7 +121,7 @@ def run_thinker(
 
     except Exception as e:
         log.error("run_thinker failed at layer %d: %s", layer, e)
-        return [], [], [], [], 0
+        return [], [], [], [], tokens
 
 
 def _build_thinker_output(
@@ -220,17 +220,11 @@ def run_matcher(
     effects: list[dict],
     value_pool: list[dict],
 ) -> tuple[list[dict], list[dict], int]:
-    """Match effects against value stocks to find opportunities.
-
-    Opportunities placed at same layer as parent effect.
-    No ticker dedup — different causal paths are distinct opportunities.
-
-    Returns:
-        (opportunity_nodes, edges, tokens)
-    """
+    """Match effects to value stocks. Returns (opportunity_nodes, edges, tokens)."""
     if not effects or not value_pool:
         return [], [], 0
 
+    tokens = 0
     try:
         system_prompt = build_system_prompt_with_skills(allowed_skills=MATCHER_SKILLS)
         matcher = Agent(
@@ -309,7 +303,7 @@ def run_matcher(
 
     except Exception as e:
         log.error("run_matcher failed: %s", e)
-        return [], [], 0
+        return [], [], tokens
 
 
 def _build_matcher_output(
@@ -383,11 +377,7 @@ def run_controller(
     max_depth: int,
     confidence_threshold: float = CONFIDENCE_THRESHOLD,
 ) -> tuple[dict, int]:
-    """Evaluate reasoning quality and decide whether to continue.
-
-    Returns:
-        ({"continue": bool, "reasoning": str, "summary": str}, tokens)
-    """
+    """Evaluate reasoning quality and decide whether to continue."""
     # Deterministic stops — no LLM needed
     if not effects:
         return {
@@ -416,6 +406,7 @@ def run_controller(
         }, 0
 
     # LLM-based decision
+    tokens = 0
     try:
         controller = Agent(
             role="Thinking Chain Evaluator",
@@ -497,4 +488,4 @@ def run_controller(
             "continue": False,
             "reasoning": f"Error in controller: {e}",
             "summary": chain_summary,
-        }, 0
+        }, tokens

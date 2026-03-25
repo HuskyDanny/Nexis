@@ -46,7 +46,7 @@ def _empty_layer_result(
             "reasoning": reason,
             "summary": "",
         },
-        tokens_used=tokens_used or {},
+        tokens_used=tokens_used if tokens_used is not None else {},
     )
 
 
