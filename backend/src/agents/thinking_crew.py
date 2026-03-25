@@ -133,7 +133,7 @@ def run_thinker(
             if _is_debug():
                 log.debug("THINKER L%d raw response: %s", layer, raw[:1000])
             parsed = parse_json_response(raw)
-        if parsed is None:
+        if not isinstance(parsed, dict):
             log.warning("Thinker JSON parse failed at layer %d", layer)
             return [], [], [], [], tokens
 
@@ -322,7 +322,7 @@ def run_matcher(
             if _is_debug():
                 log.debug("MATCHER raw response: %s", raw[:1000])
             parsed = parse_json_response(raw)
-        if parsed is None:
+        if not isinstance(parsed, dict):
             log.warning("Matcher JSON parse failed")
             return [], [], tokens
 
@@ -507,7 +507,7 @@ def run_controller(
             if _is_debug():
                 log.debug("CONTROLLER L%d raw response: %s", layer, raw[:1000])
             parsed = parse_json_response(raw)
-        if parsed is None:
+        if not isinstance(parsed, dict):
             log.warning("Controller JSON parse failed at layer %d", layer)
             return {
                 "continue": False,
