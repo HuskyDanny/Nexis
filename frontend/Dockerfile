@@ -13,18 +13,15 @@ ENV VITE_API_URL=""
 RUN npm run build
 
 # ── Serve stage ───────────────────────────────────────────────
-FROM nginx:alpine
+FROM nginxinc/nginx-unprivileged:alpine
 
-# Security: non-root (nginx user already exists in nginx:alpine, uid 101)
+# Copy built assets and config (runs as nginx user, uid 101)
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# nginx:alpine runs as root by default but worker processes run as nginx user
-# For K8s, we'll handle non-root via securityContext
-
-EXPOSE 80
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD wget -qO- http://localhost:80/ || exit 1
+    CMD wget -qO- http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

@@ -15,9 +15,9 @@ services:
     volumes: []  # No volume mounts in production
     command: null  # Use Dockerfile CMD (nginx)
     ports:
-      - "80:80"
+      - "80:8080"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
       interval: 30s
       timeout: 5s
       retries: 3
