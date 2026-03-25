@@ -20,6 +20,9 @@ _TC = "src.agents.thinking_crew"
 def _mock_crew_result(raw: str = '{"effects": []}') -> MagicMock:
     result = MagicMock()
     result.raw = raw
+    token_usage = MagicMock()
+    token_usage.total_tokens = 0
+    result.token_usage = token_usage
     return result
 
 

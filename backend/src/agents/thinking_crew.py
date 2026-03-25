@@ -101,6 +101,8 @@ def run_thinker(
             f"Return ONLY valid JSON."
         )
         prompt_chars = len(description)
+        if _is_debug():
+            log.debug("THINKER L%d prompt: %s", layer, description[:500])
         think_task = Task(
             description=description,
             expected_output="JSON object with 'effects' array.",
@@ -287,6 +289,8 @@ def run_matcher(
             f"Only include high-confidence matches. Return ONLY valid JSON."
         )
         prompt_chars = len(description)
+        if _is_debug():
+            log.debug("MATCHER prompt: %s", description[:500])
         match_task = Task(
             description=description,
             expected_output="JSON object with 'matches' array.",
@@ -452,23 +456,27 @@ def run_controller(
             if match_count
             else 0
         )
+        description = (
+            f"Evaluate this thinking chain and decide: continue or stop?\n\n"
+            f"Chain summary:\n{chain_summary}\n\n"
+            f"This layer's effects ({len(effects)}):\n{effects_json}\n\n"
+            f"Average confidence: {avg_conf:.0f}\n"
+            f"Matches found: {match_count}"
+            f"{f' (avg score: {avg_score:.0f})' if match_count else ''}\n"
+            f"Current layer: {layer} / {max_depth}\n\n"
+            f"Decide:\n"
+            f"- continue=true if unexplored causal paths remain\n"
+            f"- continue=false if chains are speculative or exhausted\n\n"
+            f"Return JSON:\n"
+            f'{{"continue": bool, "reasoning": str, "summary": str}}\n\n'
+            f"The summary should narrate the full chain so far. "
+            f"Return ONLY valid JSON."
+        )
+        prompt_chars = len(description)
+        if _is_debug():
+            log.debug("CONTROLLER L%d prompt: %s", layer, description[:500])
         ctrl_task = Task(
-            description=(
-                f"Evaluate this thinking chain and decide: continue or stop?\n\n"
-                f"Chain summary:\n{chain_summary}\n\n"
-                f"This layer's effects ({len(effects)}):\n{effects_json}\n\n"
-                f"Average confidence: {avg_conf:.0f}\n"
-                f"Matches found: {match_count}"
-                f"{f' (avg score: {avg_score:.0f})' if match_count else ''}\n"
-                f"Current layer: {layer} / {max_depth}\n\n"
-                f"Decide:\n"
-                f"- continue=true if unexplored causal paths remain\n"
-                f"- continue=false if chains are speculative or exhausted\n\n"
-                f"Return JSON:\n"
-                f'{{"continue": bool, "reasoning": str, "summary": str}}\n\n'
-                f"The summary should narrate the full chain so far. "
-                f"Return ONLY valid JSON."
-            ),
+            description=description,
             expected_output="JSON with continue, reasoning, summary.",
             agent=controller,
         )
@@ -503,8 +511,8 @@ def run_controller(
         }
         _s = str(ctrl_result["summary"]).replace("\n", " ").replace("\r", " ").replace('"', '\\"')[:80]
         log.info(
-            'CONTROLLER L%d | %.1fs | continue=%s | tokens=%d | summary="%s"',
-            layer, elapsed, ctrl_result["continue"], tokens, _s,
+            'CONTROLLER L%d | %.1fs | continue=%s | prompt=%d chars | tokens=%d | summary="%s"',
+            layer, elapsed, ctrl_result["continue"], prompt_chars, tokens, _s,
         )
         return ctrl_result, tokens
 
