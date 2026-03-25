@@ -6,7 +6,7 @@ Re-exported from thinking_helpers: convergence_score(), _parse_json_response()
 """
 
 import json
-import logging
+import os
 import time
 from uuid import uuid4
 
@@ -29,15 +29,11 @@ log = get_logger("agents")
 
 
 def _is_debug() -> bool:
-    return log.isEnabledFor(logging.DEBUG)
+    # Read env directly — cached logger level won't reflect runtime changes.
+    return os.environ.get("LOG_LEVEL", "").upper() == "DEBUG"
 
 
-def _crewai_verbose() -> bool:
-    return _is_debug()
-
-
-# Re-export for backward compat and test access
-_parse_json_response = parse_json_response  # noqa: F841
+_parse_json_response = parse_json_response  # noqa: F841 — re-export
 _prepare_parent_nodes = prepare_parent_nodes
 
 
@@ -63,6 +59,7 @@ def run_thinker(
             backstory=system_prompt,
             llm=get_main_llm(),
             tools=[FetchNewsTool()],
+            verbose=_is_debug(),
         )
 
         parents_json = json.dumps(
@@ -110,7 +107,7 @@ def run_thinker(
             agent=thinker,
         )
 
-        crew = Crew(agents=[thinker], tasks=[think_task], verbose=_crewai_verbose())
+        crew = Crew(agents=[thinker], tasks=[think_task])
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
@@ -139,13 +136,7 @@ def run_thinker(
         n_fetch = len(fetch_nodes)
         log.info(
             "THINKER L%d | skills=%d | %.1fs | parsed=%d effects, %d fetch | prompt=%d chars | tokens=%d",
-            layer,
-            len(THINKER_SKILLS),
-            elapsed,
-            n_effects,
-            n_fetch,
-            prompt_chars,
-            tokens,
+            layer, len(THINKER_SKILLS), elapsed, n_effects, n_fetch, prompt_chars, tokens,
         )
         return effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens
 
@@ -254,6 +245,7 @@ def run_matcher(
             goal="Match market effects to undervalued stocks",
             backstory=system_prompt,
             llm=get_main_llm(),
+            verbose=_is_debug(),
         )
         effects_json = json.dumps(
             [
@@ -301,7 +293,7 @@ def run_matcher(
             agent=matcher,
         )
 
-        crew = Crew(agents=[matcher], tasks=[match_task], verbose=_crewai_verbose())
+        crew = Crew(agents=[matcher], tasks=[match_task])
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
@@ -313,9 +305,14 @@ def run_matcher(
         )
 
         raw = result.raw if hasattr(result, "raw") else str(result)
+        if _is_debug():
+            log.debug("MATCHER raw response: %s", raw[:1000])
+
         parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Matcher JSON parse failed")
+            if _is_debug():
+                log.debug("MATCHER raw output: %s", raw[:500])
             return [], [], tokens
 
         n_parsed = len(parsed.get("matches", []))
@@ -325,12 +322,7 @@ def run_matcher(
         n_built = len(opp_nodes)
         log.info(
             "MATCHER | skills=%d | %.1fs | parsed=%d, built=%d opportunities | prompt=%d chars | tokens=%d",
-            len(MATCHER_SKILLS),
-            elapsed,
-            n_parsed,
-            n_built,
-            prompt_chars,
-            tokens,
+            len(MATCHER_SKILLS), elapsed, n_parsed, n_built, prompt_chars, tokens,
         )
         return opp_nodes, edges, tokens
 
@@ -445,6 +437,7 @@ def run_controller(
                 "chain has reached diminishing returns."
             ),
             llm=get_main_llm(),
+            verbose=_is_debug(),
         )
         effects_json = json.dumps(
             [
@@ -480,7 +473,7 @@ def run_controller(
             agent=controller,
         )
 
-        crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=_crewai_verbose())
+        crew = Crew(agents=[controller], tasks=[ctrl_task])
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0

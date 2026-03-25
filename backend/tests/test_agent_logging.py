@@ -240,3 +240,59 @@ class TestDebugRawResponseLogging:
         assert (
             len(raw_logs) >= 1
         ), f"Expected raw response in DEBUG logs, got: {[r.message for r in debug_logs]}"
+
+    @patch(f"{_TC}.Crew")
+    @patch(f"{_TC}.Task")
+    @patch(f"{_TC}.Agent")
+    @patch(f"{_TC}.get_main_llm")
+    @patch(f"{_TC}.FetchNewsTool")
+    @patch(f"{_TC}.build_system_prompt_with_skills", return_value="system")
+    def test_matcher_raw_response_logged_at_debug(
+        self, _bld, _fetch, _llm, _agent, _task, mock_crew_cls, caplog
+    ):
+        raw_json = '{"matches": [{"ticker": "AAPL", "effect_id": "eff-0", "sentiment_score": 80, "agreement_score": 70, "reasoning": "test"}]}'
+        mock_crew = MagicMock()
+        mock_crew.kickoff.return_value = _mock_crew_result(raw_json)
+        mock_crew_cls.return_value = mock_crew
+
+        with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
+            with patch.dict(os.environ, {"LOG_LEVEL": "DEBUG"}):
+                run_matcher(effects=_effects(), value_pool=_value_pool())
+
+        debug_logs = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        raw_logs = [
+            r for r in debug_logs if "MATCHER" in r.message and "raw" in r.message.lower()
+        ]
+        assert (
+            len(raw_logs) >= 1
+        ), f"Expected MATCHER raw response in DEBUG logs, got: {[r.message for r in debug_logs]}"
+
+    @patch(f"{_TC}.Crew")
+    @patch(f"{_TC}.Task")
+    @patch(f"{_TC}.Agent")
+    @patch(f"{_TC}.get_main_llm")
+    def test_controller_raw_response_logged_at_debug(
+        self, _llm, _agent, _task, mock_crew_cls, caplog
+    ):
+        raw_json = '{"continue": true, "reasoning": "More to explore", "summary": "Chain"}'
+        mock_crew = MagicMock()
+        mock_crew.kickoff.return_value = _mock_crew_result(raw_json)
+        mock_crew_cls.return_value = mock_crew
+
+        with caplog.at_level(logging.DEBUG, logger="nexis.agents"):
+            with patch.dict(os.environ, {"LOG_LEVEL": "DEBUG"}):
+                run_controller(
+                    chain_summary="test",
+                    effects=_effects(),
+                    matches=[],
+                    layer=1,
+                    max_depth=3,
+                )
+
+        debug_logs = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        raw_logs = [
+            r for r in debug_logs if "CONTROLLER" in r.message and "raw" in r.message.lower()
+        ]
+        assert (
+            len(raw_logs) >= 1
+        ), f"Expected CONTROLLER raw response in DEBUG logs, got: {[r.message for r in debug_logs]}"
