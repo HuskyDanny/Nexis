@@ -1,5 +1,5 @@
-# ── Build stage ───────────────────────────────────────────────
-FROM node:20-alpine AS build
+# ── Deps stage ────────────────────────────────────────────────
+FROM node:20-alpine AS deps
 
 WORKDIR /app
 
@@ -7,8 +7,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy source and build
+# ── Dev stage (deps + source, no build — for docker compose) ─
+FROM deps AS dev
 COPY . .
+
+# ── Build stage ───────────────────────────────────────────────
+FROM dev AS build
 ENV VITE_API_URL=""
 RUN npm run build
 

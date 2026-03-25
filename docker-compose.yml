@@ -20,7 +20,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      target: build
+      target: dev
     ports:
       - "3000:3000"
     volumes:
@@ -29,7 +29,7 @@ services:
       - ./frontend/index.html:/app/index.html
     environment:
       - VITE_API_URL=http://backend:8000
-    # Dev override: use vite dev server (targets Node build stage, not nginx)
+    # Dev override: use vite dev server (targets dev stage — deps only, no build)
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
   mongodb:
