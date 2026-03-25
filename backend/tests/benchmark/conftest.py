@@ -5,6 +5,21 @@ from __future__ import annotations
 import pytest
 
 
+# Registry of all scenario modules — add new scenarios here.
+SCENARIO_REGISTRY = {
+    "iran-escalation": "tests.benchmark.scenarios.iran_escalation",
+    "fed-rate-decision": "tests.benchmark.scenarios.fed_rate_decision",
+}
+
+
+def _load_scenario(module_path: str) -> dict:
+    """Import a scenario module and return its SCENARIO dict."""
+    import importlib
+
+    mod = importlib.import_module(module_path)
+    return mod.SCENARIO
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--mode",
@@ -19,6 +34,29 @@ def pytest_addoption(parser):
     parser.addoption(
         "--bench-trace", default=None, help="Path to trace JSON file for replay mode"
     )
+    parser.addoption(
+        "--scenario",
+        default="all",
+        help="Scenario ID to test (e.g. iran-escalation, fed-rate-decision, or all)",
+    )
+
+
+def pytest_generate_tests(metafunc):
+    """Parameterize tests that use the 'scenario' fixture."""
+    if "scenario" not in metafunc.fixturenames:
+        return
+    selected = metafunc.config.getoption("--scenario")
+    if selected == "all":
+        ids = list(SCENARIO_REGISTRY.keys())
+    else:
+        ids = [s.strip() for s in selected.split(",")]
+        for sid in ids:
+            if sid not in SCENARIO_REGISTRY:
+                raise pytest.UsageError(
+                    f"Unknown scenario '{sid}'. Available: {list(SCENARIO_REGISTRY.keys())}"
+                )
+    scenarios = [_load_scenario(SCENARIO_REGISTRY[sid]) for sid in ids]
+    metafunc.parametrize("scenario", scenarios, ids=ids)
 
 
 @pytest.fixture
