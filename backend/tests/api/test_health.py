@@ -7,9 +7,22 @@ from httpx import ASGITransport, AsyncClient
 async def client():
     from src.main import app
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
+    with (
+        patch("src.main.mongodb") as mock_mongo,
+        patch("src.main.redis_client") as mock_redis,
+    ):
+        # Mock lifespan dependencies so app starts without real connections
+        mock_mongo.connect = AsyncMock()
+        mock_mongo.close = AsyncMock()
+        mock_col = AsyncMock()
+        mock_col.update_many = AsyncMock(return_value=AsyncMock(modified_count=0))
+        mock_mongo.get_collection.return_value = mock_col
+        mock_redis.connect = AsyncMock()
+        mock_redis.close = AsyncMock()
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,12 @@
 import asyncio
+import logging
 
 from fastapi import APIRouter, Response
 
 from src.database.mongodb import mongodb
 from src.database.redis import redis_client
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
@@ -23,8 +26,12 @@ async def readiness(response: Response):
     try:
         await asyncio.wait_for(mongodb.db.command("ping"), timeout=2.0)
         checks["mongodb"] = "ok"
-    except Exception as e:
-        checks["mongodb"] = f"error: {e}"
+    except TimeoutError:
+        log.exception("MongoDB health check timed out")
+        checks["mongodb"] = "error: timeout"
+    except Exception:
+        log.exception("MongoDB health check failed")
+        checks["mongodb"] = "error: not connected"
 
     # Redis check with 2s timeout
     try:
@@ -32,8 +39,12 @@ async def readiness(response: Response):
             raise RuntimeError("not connected")
         await asyncio.wait_for(redis_client.client.ping(), timeout=2.0)
         checks["redis"] = "ok"
-    except Exception as e:
-        checks["redis"] = f"error: {e}"
+    except TimeoutError:
+        log.exception("Redis health check timed out")
+        checks["redis"] = "error: timeout"
+    except Exception:
+        log.exception("Redis health check failed")
+        checks["redis"] = "error: not connected"
 
     all_ok = all(v == "ok" for v in checks.values())
     if not all_ok:

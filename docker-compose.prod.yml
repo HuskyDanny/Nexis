@@ -2,7 +2,7 @@
 services:
   backend:
     volumes: []  # No volume mounts in production
-    command: []  # Use Dockerfile CMD (uvicorn with --workers)
+    command: null  # Use Dockerfile CMD (uvicorn with --workers)
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/live')"]
       interval: 30s
@@ -10,8 +10,10 @@ services:
       retries: 3
 
   frontend:
+    build:
+      context: ./frontend  # Override to use final nginx stage (no target)
     volumes: []  # No volume mounts in production
-    command: []  # Use Dockerfile CMD (nginx)
+    command: null  # Use Dockerfile CMD (nginx)
     ports:
       - "80:80"
     healthcheck:

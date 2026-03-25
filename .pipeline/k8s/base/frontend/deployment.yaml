@@ -43,6 +43,7 @@ spec:
             limits:
               memory: "128Mi"
           securityContext:
+            runAsNonRoot: true
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]

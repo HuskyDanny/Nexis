@@ -4,7 +4,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - ./backend/src:/app/src
     depends_on:
       mongodb:
         condition: service_healthy
@@ -18,7 +18,9 @@ services:
     command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: build
     ports:
       - "3000:3000"
     volumes:
@@ -26,7 +28,7 @@ services:
       - /app/node_modules
     environment:
       - VITE_API_URL=http://backend:8000
-    # Dev override: use vite dev server
+    # Dev override: use vite dev server (targets Node build stage, not nginx)
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
   mongodb:

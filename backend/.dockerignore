@@ -1,0 +1,33 @@
+# Version control
+.git
+.gitignore
+
+# Environment
+.env
+.env.*
+!.env.base
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+.venv
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.deepeval
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Docs & CI
+docs/
+*.md
+Makefile
+
+# Tests (not needed in production image)
+tests/

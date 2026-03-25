@@ -6,12 +6,13 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency spec first (layer caching)
+# Copy dependency spec and source (hatchling needs packages=["src"])
 COPY pyproject.toml ./
+COPY src/ ./src/
 
 # Install production deps only — no editable install in builder
-RUN uv venv /app/.venv \
-    && uv pip install --python /app/.venv/bin/python --no-cache .
+RUN uv venv /opt/venv \
+    && uv pip install --python /opt/venv/bin/python --no-cache .
 
 # ── Runtime stage ─────────────────────────────────────────────
 FROM python:3.12-slim
@@ -21,9 +22,9 @@ RUN groupadd -g 1001 app && useradd -u 1001 -g app -s /bin/false app
 
 WORKDIR /app
 
-# Copy venv from builder
-COPY --from=builder /app/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
+# Copy venv from builder (outside /app to avoid volume mount hiding it)
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application source
 COPY src/ ./src/
