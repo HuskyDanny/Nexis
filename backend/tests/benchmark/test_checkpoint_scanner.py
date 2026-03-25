@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from tests.benchmark.scoring.checkpoint_scanner import (
     extract_key_terms,

@@ -149,7 +149,7 @@ async def session_events(session_id: str):
         for _ in range(120):  # 60 seconds max
             session = await col.find_one({"id": session_id}, {"_id": 0})
             if not session:
-                yield f'event: error\ndata: {{"error": "Session not found"}}\n\n'
+                yield 'event: error\ndata: {"error": "Session not found"}\n\n'
                 return
 
             status = session["status"]

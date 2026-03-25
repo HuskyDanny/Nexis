@@ -56,7 +56,10 @@ def _make_minimal_trace(
 class TestWrapSkillTool:
     def test_records_skill_name(self):
         invocations: list[str] = []
-        original = lambda skill_name: f"content for {skill_name}"
+
+        def original(skill_name):
+            return f"content for {skill_name}"
+
         wrapped = wrap_skill_tool(original, invocations)
         result = wrapped("geopolitical_risk")
 
@@ -65,7 +68,10 @@ class TestWrapSkillTool:
 
     def test_records_multiple_invocations(self):
         invocations: list[str] = []
-        original = lambda skill_name: "ok"
+
+        def original(skill_name):  # noqa: ARG001
+            return "ok"
+
         wrapped = wrap_skill_tool(original, invocations)
         wrapped("geopolitical_risk")
         wrapped("macro_economics")
@@ -91,8 +97,13 @@ class TestWrapSkillTool:
 
     def test_shared_invocations_list(self):
         invocations: list[str] = []
-        fn1 = lambda skill_name: "a"
-        fn2 = lambda skill_name: "b"
+
+        def fn1(skill_name):  # noqa: ARG001
+            return "a"
+
+        def fn2(skill_name):  # noqa: ARG001
+            return "b"
+
         w1 = wrap_skill_tool(fn1, invocations)
         w2 = wrap_skill_tool(fn2, invocations)
         w1("skill_a")

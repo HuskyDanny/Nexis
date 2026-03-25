@@ -9,7 +9,7 @@ Cache contract:
 """
 
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

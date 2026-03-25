@@ -67,7 +67,7 @@ class FetchNewsTool(BaseTool):
     def _run(self, query: str) -> list[dict]:
         """Sync wrapper for CrewAI compatibility."""
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, self.arun(query=query))
                 return future.result()

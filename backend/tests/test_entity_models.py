@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-import pytest
+from datetime import datetime
 from src.models.pool_common import ScoreResult, ProcessResult, PipelineResult
 from src.models.news_entity import NewsEntity, EntityStatus
 from src.models.value_entity import ValueEntity

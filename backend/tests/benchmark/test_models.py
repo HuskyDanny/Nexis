@@ -1,5 +1,3 @@
-import json
-import pytest
 from tests.benchmark.models import (
     AgentTrace,
     ControllerOutput,

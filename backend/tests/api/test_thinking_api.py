@@ -8,10 +8,9 @@ Covers:
 """
 
 import asyncio
-from dataclasses import field
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.thinking_service import LayerResult
 
@@ -104,7 +103,7 @@ async def test_step_calls_run_layer():
         mock_db.get_collection.return_value = mock_col
         from src.api.thinking import think_step
 
-        resp = await think_step("sess1")
+        await think_step("sess1")
 
         mock_rl.assert_called_once()
         kw = mock_rl.call_args

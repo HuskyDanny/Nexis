@@ -3,6 +3,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.graphs import router as graphs_router
+from src.api.health import router as health_router
+from src.api.nodes import router as nodes_router
+from src.api.pools import router as pools_router
+from src.api.thinking import router as thinking_router
+from src.api.thinking_auto import router as thinking_auto_router
 from src.core.config import settings
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
@@ -48,14 +54,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-from src.api.graphs import router as graphs_router
-from src.api.health import router as health_router
-from src.api.nodes import router as nodes_router
-from src.api.pools import router as pools_router
-from src.api.thinking import router as thinking_router
-from src.api.thinking_auto import router as thinking_auto_router
 
 app.include_router(health_router)
 app.include_router(graphs_router)

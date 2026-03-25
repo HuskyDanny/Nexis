@@ -82,7 +82,6 @@ class TestSessionInit:
         mock_mongodb.get_collection = MagicMock(side_effect=get_collection)
 
         # Reimport to pick up our patched mock
-        import importlib
         import sys
 
         if "src.api.thinking" in sys.modules:
@@ -113,7 +112,6 @@ class TestStepCacheWrite:
         new_nodes = [_effect("e1", 1, ["n1", "n2"])]
         new_edges = [_edge("n1", "e1"), _edge("n2", "e1")]
 
-        import importlib
         import sys
 
         if "src.api.thinking" in sys.modules:
