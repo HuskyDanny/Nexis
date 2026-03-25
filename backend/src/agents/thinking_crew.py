@@ -137,16 +137,7 @@ def run_thinker(
             log.warning("Thinker JSON parse failed at layer %d", layer)
             return [], [], [], [], tokens
 
-<<<<<<< HEAD
         n_effects = len(parsed.get("effects", []))
-=======
-        log.info(
-            "THINKER L%d | effects=%d | tokens=%d",
-            layer,
-            len(parsed.get("effects", [])),
-            tokens,
-        )
->>>>>>> 4402d5f (fix: address PR #28 review — defensive getattr, resolve conflicts, mutable defaults)
         effect_nodes, fetch_nodes, effect_edges, fetch_edges = _build_thinker_output(
             parsed.get("effects", []), parent_nodes, news_pool, layer
         )
@@ -335,15 +326,7 @@ def run_matcher(
             log.warning("Matcher JSON parse failed")
             return [], [], tokens
 
-<<<<<<< HEAD
         n_parsed = len(parsed.get("matches", []))
-=======
-        log.info(
-            "MATCHER | matches=%d | tokens=%d",
-            len(parsed.get("matches", [])),
-            tokens,
-        )
->>>>>>> 4402d5f (fix: address PR #28 review — defensive getattr, resolve conflicts, mutable defaults)
         opp_nodes, edges = _build_matcher_output(
             parsed.get("matches", []), effects, value_pool
         )
@@ -532,16 +515,8 @@ def run_controller(
                 "summary": chain_summary,
             }, tokens
 
-<<<<<<< HEAD
         ctrl_result = {
             "continue": bool(parsed.get("continue", parsed.get("continue_decision", False))),
-=======
-        cont = bool(parsed.get("continue", parsed.get("continue_decision", False)))
-        log.info("CONTROLLER L%d | continue=%s | tokens=%d",
-                 layer, cont, tokens)
-        return {
-            "continue": cont,
->>>>>>> 4402d5f (fix: address PR #28 review — defensive getattr, resolve conflicts, mutable defaults)
             "reasoning": parsed.get("reasoning", ""),
             "summary": parsed.get("summary", chain_summary),
         }
