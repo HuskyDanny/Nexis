@@ -6,6 +6,7 @@ Re-exported from thinking_helpers: convergence_score(), _parse_json_response()
 """
 
 import json
+import logging
 import os
 import time
 from uuid import uuid4
@@ -29,7 +30,10 @@ log = get_logger("agents")
 
 
 def _is_debug() -> bool:
-    # Read env directly — cached logger level won't reflect runtime changes.
+    return log.isEnabledFor(logging.DEBUG)
+
+
+def _crewai_verbose() -> bool:
     return os.environ.get("LOG_LEVEL", "").upper() == "DEBUG"
 
 
@@ -59,7 +63,7 @@ def run_thinker(
             backstory=system_prompt,
             llm=get_main_llm(),
             tools=[FetchNewsTool()],
-            verbose=_is_debug(),
+            verbose=_crewai_verbose(),
         )
 
         parents_json = json.dumps(
@@ -107,7 +111,7 @@ def run_thinker(
             agent=thinker,
         )
 
-        crew = Crew(agents=[thinker], tasks=[think_task])
+        crew = Crew(agents=[thinker], tasks=[think_task], verbose=_crewai_verbose())
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
@@ -245,7 +249,7 @@ def run_matcher(
             goal="Match market effects to undervalued stocks",
             backstory=system_prompt,
             llm=get_main_llm(),
-            verbose=_is_debug(),
+            verbose=_crewai_verbose(),
         )
         effects_json = json.dumps(
             [
@@ -293,7 +297,7 @@ def run_matcher(
             agent=matcher,
         )
 
-        crew = Crew(agents=[matcher], tasks=[match_task])
+        crew = Crew(agents=[matcher], tasks=[match_task], verbose=_crewai_verbose())
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
@@ -437,7 +441,7 @@ def run_controller(
                 "chain has reached diminishing returns."
             ),
             llm=get_main_llm(),
-            verbose=_is_debug(),
+            verbose=_crewai_verbose(),
         )
         effects_json = json.dumps(
             [
@@ -473,7 +477,7 @@ def run_controller(
             agent=controller,
         )
 
-        crew = Crew(agents=[controller], tasks=[ctrl_task])
+        crew = Crew(agents=[controller], tasks=[ctrl_task], verbose=_crewai_verbose())
         t0 = time.perf_counter()
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
