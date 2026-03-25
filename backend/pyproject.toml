@@ -12,6 +12,7 @@ dependencies = [
     "python-jose>=3.3",
     "bcrypt>=4.2",
     "crewai>=1.0",
+    "yfinance>=0.2",
     "httpx>=0.28",
 ]
 

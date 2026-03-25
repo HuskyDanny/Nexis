@@ -1,0 +1,43 @@
+# Version control
+.git
+.gitignore
+
+# Environment
+.env
+.env.*
+!.env.base
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+backend/.venv
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+backend/.deepeval
+
+# Node
+node_modules
+frontend/node_modules
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Docker
+docker-compose*.yml
+Dockerfile
+
+# Docs & CI
+docs/
+.github/
+.pipeline/
+.claude/
+.harshJudge/
+*.md
+Makefile
