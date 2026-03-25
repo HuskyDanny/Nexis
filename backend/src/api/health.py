@@ -26,7 +26,7 @@ async def readiness(response: Response):
     try:
         await asyncio.wait_for(mongodb.db.command("ping"), timeout=2.0)
         checks["mongodb"] = "ok"
-    except TimeoutError:
+    except asyncio.TimeoutError:
         log.warning("MongoDB health check timed out")
         checks["mongodb"] = "error: timeout"
     except Exception:
@@ -39,7 +39,7 @@ async def readiness(response: Response):
             raise RuntimeError("not connected")
         await asyncio.wait_for(redis_client.client.ping(), timeout=2.0)
         checks["redis"] = "ok"
-    except TimeoutError:
+    except asyncio.TimeoutError:
         log.warning("Redis health check timed out")
         checks["redis"] = "error: timeout"
     except Exception:
