@@ -28,7 +28,6 @@ class TestCreateJudgeModel:
         from tests.benchmark.scoring import judge_models
 
         mock_instance = MagicMock()
-        mock_cls = MagicMock(return_value=mock_instance)
 
         with patch.object(judge_models, "_make_anthropic") as mock_factory:
             mock_factory.return_value = mock_instance

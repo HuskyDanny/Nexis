@@ -5,17 +5,13 @@ from __future__ import annotations
 import pytest
 
 from tests.benchmark.models import (
-    AggregateReport,
     BenchmarkReport,
-    BenchmarkTrace,
     DimensionScore,
     Pass1Report,
     Pass2Scores,
 )
 from tests.benchmark.scoring.report import (
-    WEIGHTS,
     build_aggregate,
-    build_report,
     compute_overall,
 )
 

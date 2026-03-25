@@ -70,38 +70,37 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     [],
   );
 
-  // Load session
-  const loadSession = useCallback(async () => {
-    try {
-      const res = await graphApi.getSession(sessionId);
-      const s = res.data;
-      setSession(s);
-      positionMap.current.clear();
-
-      const { rfNodes, rfEdges } = buildThinkingGraph(s.nodes, s.edges);
-      savePositions(rfNodes);
-      setNodes(rfNodes);
-      setEdges(rfEdges);
-
-      setTimeout(
-        () => rfInstance.current?.fitView({ padding: 0.15, duration: 400 }),
-        200,
-      );
-      log.info(
-        "Session loaded:",
-        s.nodes.length,
-        "nodes,",
-        s.edges.length,
-        "edges",
-      );
-    } catch (err) {
-      log.error("Failed to load session:", err);
-    }
-  }, [sessionId, setNodes, setEdges, savePositions]);
-
+  // Load session on mount / sessionId change
   useEffect(() => {
-    loadSession();
-  }, [loadSession]);
+    const load = async () => {
+      try {
+        const res = await graphApi.getSession(sessionId);
+        const s = res.data;
+        setSession(s);
+        positionMap.current.clear();
+
+        const { rfNodes, rfEdges } = buildThinkingGraph(s.nodes, s.edges);
+        savePositions(rfNodes);
+        setNodes(rfNodes);
+        setEdges(rfEdges);
+
+        setTimeout(
+          () => rfInstance.current?.fitView({ padding: 0.15, duration: 400 }),
+          200,
+        );
+        log.info(
+          "Session loaded:",
+          s.nodes.length,
+          "nodes,",
+          s.edges.length,
+          "edges",
+        );
+      } catch (err) {
+        log.error("Failed to load session:", err);
+      }
+    };
+    load();
+  }, [sessionId, setNodes, setEdges, savePositions]);
 
   const refreshSession = useCallback(async () => {
     try {

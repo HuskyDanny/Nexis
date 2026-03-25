@@ -1,6 +1,5 @@
 """Integration test: full pipeline with macro news scoring and tiered quota."""
 
-import pytest
 from datetime import datetime, timezone
 from src.pipelines.news.score import NewsDecayScore
 from src.pipelines.news.quota import apply_tiered_quota

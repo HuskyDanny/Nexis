@@ -17,13 +17,27 @@ from src.agents.thinking_crew import run_thinker, run_matcher, run_controller
 _TC = "src.agents.thinking_crew"
 
 
-def _mock_crew_result(raw: str = '{"effects": []}') -> MagicMock:
-    result = MagicMock()
-    result.raw = raw
-    token_usage = MagicMock()
-    token_usage.total_tokens = 0
-    result.token_usage = token_usage
-    return result
+class _FakeTokenUsage:
+    """Plain object to avoid MagicMock attribute-access quirks across Python versions."""
+
+    def __init__(self, total_tokens: int = 0):
+        self.total_tokens = total_tokens
+
+
+class _FakeCrewResult:
+    """Plain object that mimics CrewAI's kickoff result.
+
+    Using a real class instead of MagicMock ensures ``hasattr`` / attribute
+    access behaves identically on Python 3.12 (CI) and 3.13 (local).
+    """
+
+    def __init__(self, raw: str = '{"effects": []}'):
+        self.raw = raw
+        self.token_usage = _FakeTokenUsage()
+
+
+def _mock_crew_result(raw: str = '{"effects": []}') -> _FakeCrewResult:
+    return _FakeCrewResult(raw=raw)
 
 
 def _parent_nodes(n: int = 1) -> list[dict]:

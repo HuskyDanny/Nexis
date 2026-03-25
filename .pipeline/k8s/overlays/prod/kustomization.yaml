@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: nexis-backend
+    newName: REGISTRY_PLACEHOLDER/nexis-backend
+    newTag: latest
+  - name: nexis-frontend
+    newName: REGISTRY_PLACEHOLDER/nexis-frontend
+    newTag: latest
+
+patches:
+  - path: patches/backend-resources.yaml
+  - path: patches/frontend-resources.yaml

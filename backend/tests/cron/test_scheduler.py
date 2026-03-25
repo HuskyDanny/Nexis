@@ -4,7 +4,6 @@ PoolPipeline requires repo and market in its constructor, so the factories
 accept market and repo as parameters and return a configured PoolPipeline.
 """
 
-import pytest
 from unittest.mock import MagicMock
 
 from src.cron.scheduler import build_news_pipeline, build_value_pipeline

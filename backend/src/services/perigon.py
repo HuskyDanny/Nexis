@@ -84,7 +84,7 @@ def _classify_scope(article: dict) -> int:
     """Derive scope score (1-5) from Perigon's pre-classified metadata."""
     topics = [t.get("name", "").lower() for t in article.get("topics", [])]
     categories = [c.get("name", "").lower() for c in article.get("categories", [])]
-    labels = [l.get("name", "").lower() for l in article.get("labels", [])]
+    labels = [lb.get("name", "").lower() for lb in article.get("labels", [])]
     all_names = topics + categories
     companies = article.get("companies", [])
 
@@ -212,9 +212,9 @@ def _to_pool_item(article: dict) -> dict:
             "topics": topics,
             "categories": categories,
             "companies": [c.get("name", "") for c in article.get("companies", [])],
-            "locations": [l.get("name", "") for l in article.get("locations", [])],
+            "locations": [loc.get("name", "") for loc in article.get("locations", [])],
             "event_types": [e.get("name", "") for e in article.get("eventTypes", [])],
-            "labels": [l.get("name", "") for l in article.get("labels", [])],
+            "labels": [lb.get("name", "") for lb in article.get("labels", [])],
         },
     }
 

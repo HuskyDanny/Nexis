@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -47,13 +47,10 @@ function PoolCard({
   const dir = DIR_ICON[item.direction] ?? "";
   const dirColor = DIR_COLOR[item.direction] ?? "#6b7394";
   const title = item.title ?? `${item.ticker} — $${item.price}`;
-  const anim = useMemo(
-    () => ({
-      delay: `${Math.random() * 3}s`,
-      duration: `${3 + Math.random() * 2}s`,
-    }),
-    [],
-  );
+  const [anim] = useState(() => ({
+    delay: `${Math.random() * 3}s`,
+    duration: `${3 + Math.random() * 2}s`,
+  }));
   const isFloating = floating && !selected;
   const edge = `1px solid ${selected ? color : "rgba(255,255,255,0.06)"}`;
   const accent = `3px solid ${color}`;
@@ -126,7 +123,6 @@ function App() {
   useEffect(() => {
     const date = todayDate();
     log.info("Loading live pools for", date);
-    setLoading(true);
     graphApi
       .getLivePools(date)
       .then((res) => {
@@ -147,7 +143,11 @@ function App() {
   const toggleNews = useCallback((id: string) => {
     setSelectedNews((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }, []);
@@ -155,7 +155,11 @@ function App() {
   const toggleValue = useCallback((id: string) => {
     setSelectedValues((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }, []);

@@ -1,7 +1,31 @@
-FROM node:20-alpine
+# ── Deps stage ────────────────────────────────────────────────
+FROM node:20-alpine AS deps
+
 WORKDIR /app
-COPY package*.json .
-RUN npm install
+
+# Install deps first (layer caching)
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# ── Dev stage (deps + source, no build — for docker compose) ─
+FROM deps AS dev
 COPY . .
-EXPOSE 3000
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+# ── Build stage ───────────────────────────────────────────────
+FROM dev AS build
+ENV VITE_API_URL=""
+RUN npm run build
+
+# ── Serve stage ───────────────────────────────────────────────
+FROM nginxinc/nginx-unprivileged:alpine
+
+# Copy built assets and config (runs as nginx user, uid 101)
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD wget -qO- http://localhost:8080/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

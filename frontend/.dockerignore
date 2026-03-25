@@ -1,0 +1,22 @@
+# Version control
+.git
+.gitignore
+
+# Environment
+.env
+.env.*
+
+# Dependencies (rebuilt in Docker)
+node_modules
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Build output (rebuilt in Docker)
+dist
+
+# Docs
+*.md

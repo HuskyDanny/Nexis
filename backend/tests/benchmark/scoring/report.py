@@ -8,7 +8,6 @@ from tests.benchmark.models import (
     AggregateReport,
     BenchmarkReport,
     BenchmarkTrace,
-    DimensionScore,
     Pass1Report,
     Pass2Scores,
 )

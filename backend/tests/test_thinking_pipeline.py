@@ -7,7 +7,6 @@ No real LLM calls — all three agents (thinker, matcher, controller) are mocked
 import asyncio
 from unittest.mock import patch
 
-import pytest
 
 from tests.helpers_thinking_pipeline import (
     controller_continue,
