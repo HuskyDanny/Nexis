@@ -1,6 +1,7 @@
 """Shared helpers and constants for the thinking pipeline agents."""
 
 import json
+from uuid import uuid4
 
 THINKER_SKILLS = [
     "macro_economics",
@@ -126,3 +127,145 @@ def parse_json_response(raw: str) -> dict | None:
                         break
 
     return None
+
+
+def build_thinker_output(
+    effects: list[dict],
+    parent_nodes: list[dict],
+    news_pool: list[dict],
+    layer: int,
+) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    """Construct nodes and edges from parsed thinker effects."""
+    existing_ids = {n.get("id", "") for n in parent_nodes}
+    effect_nodes: list[dict] = []
+    fetch_nodes: list[dict] = []
+    effect_edges: list[dict] = []
+    fetch_edges: list[dict] = []
+
+    for effect in effects:
+        effect_id = uuid4().hex[:12]
+        parent_ids = [
+            pid for pid in effect.get("parent_ids", []) if pid in existing_ids
+        ]
+        if not parent_ids:
+            parent_ids = [parent_nodes[0]["id"]]
+
+        effect_nodes.append(
+            {
+                "id": effect_id,
+                "layer": layer,
+                "type": "effect",
+                "content": effect.get("content", "Unknown effect"),
+                "reasoning": effect.get("reasoning", ""),
+                "confidence": effect.get("confidence", 50),
+                "sources": [],
+                "parents": parent_ids,
+                "selected": True,
+                "metadata": {
+                    "sector": effect.get("sector", "general"),
+                    "parent_count": len(parent_ids),
+                    "information_gaps": effect.get("information_gaps", []),
+                },
+            }
+        )
+
+        for pid in parent_ids:
+            effect_edges.append(
+                {
+                    "source": pid,
+                    "target": effect_id,
+                    "relationship": "causes" if layer == 1 else "compounds",
+                }
+            )
+
+        # Handle fetched news references
+        for fetched_id in effect.get("fetched_news_ids", []):
+            if fetched_id in existing_ids:
+                continue
+            fetched_item = next(
+                (n for n in news_pool if n.get("id") == fetched_id), None
+            )
+            if fetched_item:
+                fetch_node_id = f"fetch-{uuid4().hex[:8]}"
+                title = fetched_item.get("title", fetched_item.get("summary", ""))
+                fetch_nodes.append(
+                    {
+                        "id": fetch_node_id,
+                        "layer": layer,
+                        "type": "fetch",
+                        "content": f"Related: {title}",
+                        "reasoning": "Agent fetched this news for context",
+                        "confidence": 100,
+                        "sources": [fetched_item.get("url", "")],
+                        "parents": [parent_ids[0]],
+                        "selected": True,
+                        "metadata": fetched_item,
+                    }
+                )
+                fetch_edges.append(
+                    {
+                        "source": parent_ids[0],
+                        "target": fetch_node_id,
+                        "relationship": "fetched_for",
+                    }
+                )
+                existing_ids.add(fetched_id)
+
+    return effect_nodes, fetch_nodes, effect_edges, fetch_edges
+
+
+def build_matcher_output(
+    matches: list[dict],
+    effects: list[dict],
+    value_pool: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    """Construct opportunity nodes and edges from parsed matcher output."""
+    effect_map = {e.get("id", ""): e for e in effects}
+    value_map = {v.get("ticker", ""): v for v in value_pool}
+
+    opportunity_nodes: list[dict] = []
+    new_edges: list[dict] = []
+
+    for match in matches:
+        ticker = match.get("ticker", "")
+        effect_id = match.get("effect_id", "")
+
+        if effect_id not in effect_map:
+            continue
+        val = value_map.get(ticker, {})
+        if not val:
+            continue
+
+        parent_effect = effect_map[effect_id]
+        opp_layer = parent_effect.get("layer", 1)
+
+        sentiment = match.get("sentiment_score", 50.0)
+        discount = val.get("discount_pct", 0)
+        agreement = match.get("agreement_score", 50.0)
+        score = convergence_score(sentiment, discount, agreement)
+
+        opp_id = f"opp-{uuid4().hex[:8]}"
+        opportunity_nodes.append(
+            {
+                "id": opp_id,
+                "layer": opp_layer,
+                "type": "opportunity",
+                "content": f"{ticker} \u2014 {score}% conviction",
+                "reasoning": match.get("reasoning", ""),
+                "confidence": score,
+                "sources": [],
+                "parents": [effect_id],
+                "selected": True,
+                "metadata": {
+                    **val,
+                    "convergence_score": score,
+                    "sentiment_score": sentiment,
+                    "agreement_score": agreement,
+                },
+            }
+        )
+        new_edges.append(
+            {"source": effect_id, "target": opp_id, "relationship": "matches"}
+        )
+
+    return opportunity_nodes, new_edges
