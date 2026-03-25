@@ -131,6 +131,16 @@ async def run_scenario_live(
                     latency_ms=0,
                 ),
             )
+        agent_traces.append(
+            AgentTrace(
+                agent="controller",
+                input_summary=f"Layer {layer_num}: {len(result.effect_nodes)} effects, {len(result.opportunity_nodes)} matches",
+                output_raw=json.dumps(cd, default=str),
+                skills_loaded=[],
+                tokens_used=result.tokens_used.get("controller", 0),
+                latency_ms=0,
+            ),
+        )
 
         total_tokens += sum(result.tokens_used.values())
 

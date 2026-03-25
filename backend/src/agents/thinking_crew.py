@@ -112,7 +112,7 @@ def run_thinker(
                 layer,
                 raw[:500],
             )
-            return [], [], [], [], 0
+            return [], [], [], [], tokens
 
         effect_nodes, fetch_nodes, effect_edges, fetch_edges = _build_thinker_output(
             parsed.get("effects", []), parent_nodes, news_pool, layer
@@ -300,7 +300,7 @@ def run_matcher(
         parsed = parse_json_response(raw)
         if parsed is None:
             log.warning("Matcher JSON parse failed")
-            return [], [], 0
+            return [], [], tokens
 
         opp_nodes, edges = _build_matcher_output(
             parsed.get("matches", []), effects, value_pool
@@ -483,7 +483,7 @@ def run_controller(
                 "continue": False,
                 "reasoning": "Error: failed to parse controller response.",
                 "summary": chain_summary,
-            }, 0
+            }, tokens
 
         return {
             "continue": bool(parsed.get("continue", False)),
