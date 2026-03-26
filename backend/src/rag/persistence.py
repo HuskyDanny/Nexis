@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone, timedelta
 
+from src.core.logger import get_logger
 from src.rag.config import RAGConfig
 from src.rag.protocols import (
     EmbeddingProvider,
@@ -13,7 +13,7 @@ from src.rag.protocols import (
     NodeRepository,
 )
 
-log = logging.getLogger("rag.persistence")
+log = get_logger("rag.persistence")
 
 
 class NodePersistenceService:

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-
+from src.core.logger import get_logger
 from fastembed import SparseTextEmbedding
 
-log = logging.getLogger("rag.sparse")
+log = get_logger("rag.sparse")
 
 
 class FastEmbedBM25:

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
+from src.core.logger import get_logger
 from src.rag.config import RAGConfig
 from src.rag.persistence import NodePersistenceService
 from src.rag.search import NodeSearchService
 
-log = logging.getLogger("rag")
+log = get_logger("rag")
 
 _rag_config: RAGConfig | None = None
 _persistence: NodePersistenceService | None = None

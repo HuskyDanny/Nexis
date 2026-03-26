@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
 import httpx
 
 from src.core.config import settings
+from src.core.logger import get_logger
 
-log = logging.getLogger("rag.embedding")
+log = get_logger("rag.embedding")
 
 
 class SiliconFlowEmbedding:

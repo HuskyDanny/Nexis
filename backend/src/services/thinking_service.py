@@ -209,11 +209,16 @@ async def run_pipeline(
                 result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
             )
             if all_new_nodes:
-                # Get market and date from seeds
-                market = (
-                    seeds[0].get("metadata", {}).get("market", "US") if seeds else "US"
-                )
-                date = seeds[0].get("metadata", {}).get("date", "") if seeds else ""
+                # Get market and date from seeds — check top-level keys first, then metadata
+                market = "US"
+                date = ""
+                if seeds:
+                    market = seeds[0].get(
+                        "market", seeds[0].get("metadata", {}).get("market", "US")
+                    )
+                    date = seeds[0].get(
+                        "date", seeds[0].get("metadata", {}).get("date", "")
+                    )
                 await persistence.persist_batch(
                     all_new_nodes,
                     session_id=session_id,

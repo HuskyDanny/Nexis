@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 
 from qdrant_client import AsyncQdrantClient
@@ -25,9 +24,10 @@ from qdrant_client.models import (
     Prefetch,
 )
 
+from src.core.logger import get_logger
 from src.rag.config import RAGConfig
 
-log = logging.getLogger("rag.qdrant")
+log = get_logger("rag.qdrant")
 
 # Namespace UUID for deterministic ID generation from string node IDs
 _NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
@@ -75,10 +75,12 @@ class QdrantVectorStore:
         await self.client.create_payload_index(
             collection_name=collection, field_name="date", field_schema="datetime"
         )
-        for field in ["confidence", "layer"]:
-            await self.client.create_payload_index(
-                collection_name=collection, field_name=field, field_schema="integer"
-            )
+        await self.client.create_payload_index(
+            collection_name=collection, field_name="confidence", field_schema="float"
+        )
+        await self.client.create_payload_index(
+            collection_name=collection, field_name="layer", field_schema="integer"
+        )
         log.info("Created Qdrant collection '%s'", collection)
 
     async def upsert(self, collection: str, points: list[dict]) -> None:

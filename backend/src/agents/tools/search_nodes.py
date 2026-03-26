@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from typing import Type
 
 from crewai.tools import BaseTool
@@ -75,9 +76,9 @@ class SearchNodesTool(BaseTool):
     ) -> list[dict]:
         """Sync wrapper for CrewAI compatibility.
 
-        Uses the existing event loop when available (via run_coroutine_threadsafe)
-        to avoid creating a second loop that conflicts with singleton async clients.
-        Falls back to asyncio.run() only when no loop is running.
+        When a loop is already running (CrewAI context), runs the coroutine in a
+        fresh thread with its own event loop to avoid deadlocks. Falls back to
+        asyncio.run() when no loop is running.
         """
         coro = self.arun(
             query=query,
@@ -90,12 +91,12 @@ class SearchNodesTool(BaseTool):
             limit=limit,
         )
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, coro)
+                return future.result()
         except RuntimeError:
             return asyncio.run(coro)
-        # Schedule on the existing loop from a worker thread
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result()
 
     async def arun(
         self,
