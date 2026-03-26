@@ -4,13 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from src.core.config import settings
-from src.database.mongodb import mongodb
 from src.rag.config import RAGConfig
-from src.rag.embedding import SiliconFlowEmbedding
-from src.rag.sparse_encoder import FastEmbedBM25
-from src.rag.qdrant_store import QdrantVectorStore
-from src.rag.node_store_repo import MongoNodeStoreRepo
 from src.rag.persistence import NodePersistenceService
 from src.rag.search import NodeSearchService
 
@@ -19,7 +13,7 @@ log = logging.getLogger("rag")
 _rag_config: RAGConfig | None = None
 _persistence: NodePersistenceService | None = None
 _search: NodeSearchService | None = None
-_qdrant: QdrantVectorStore | None = None
+_qdrant = None  # QdrantVectorStore, lazy imported
 
 
 def get_rag_config() -> RAGConfig:
@@ -31,6 +25,14 @@ def get_rag_config() -> RAGConfig:
 
 async def init_rag_services() -> tuple[NodePersistenceService, NodeSearchService]:
     global _persistence, _search, _qdrant
+
+    # Lazy imports — these pull in fastembed/qdrant_client which may not be installed in test envs
+    from src.core.config import settings
+    from src.database.mongodb import mongodb
+    from src.rag.embedding import SiliconFlowEmbedding
+    from src.rag.sparse_encoder import FastEmbedBM25
+    from src.rag.qdrant_store import QdrantVectorStore
+    from src.rag.node_store_repo import MongoNodeStoreRepo
 
     config = get_rag_config()
     embedder = SiliconFlowEmbedding(model=config.embedding_model)
