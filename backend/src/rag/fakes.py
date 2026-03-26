@@ -135,3 +135,10 @@ class FakeNodeRepo:
     async def mark_indexed(self, node_id: str, indexed: bool) -> None:
         if node_id in self.docs:
             self.docs[node_id]["indexed"] = indexed
+
+    async def find_ids_older_than(self, cutoff: datetime) -> list[str]:
+        return [
+            id_
+            for id_, d in self.docs.items()
+            if d.get("created_at") and d["created_at"] < cutoff
+        ]
