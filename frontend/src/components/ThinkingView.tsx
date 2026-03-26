@@ -15,9 +15,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { ThinkingSession, ThinkingNode } from "../types/thinking";
+import type { ThinkingEdge } from "../types/thinking";
 import {
   buildThinkingGraph,
   nodeStyle,
+  concentricPosition,
   LAYER_COLORS,
 } from "../lib/thinking-graph-builder";
 import {
@@ -29,8 +31,19 @@ import { graphApi } from "../services/api";
 import { createLogger } from "../lib/logger";
 import { AgentFace } from "./AgentFace";
 import { usePathHighlight } from "../hooks/usePathHighlight";
+import { StreamingNode } from "./StreamingNode";
+import { useSSESession } from "../hooks/useSSESession";
+import type {
+  SSENodeStart,
+  SSENodeText,
+  SSENodeComplete,
+  SSELayerComplete,
+  SSESessionComplete,
+} from "../hooks/useSSESession";
 
 const log = createLogger("thinking-view");
+
+const nodeTypes = { streaming: StreamingNode };
 
 interface ThinkingViewProps {
   sessionId: string;
@@ -45,6 +58,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const positionMap = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const layerNodeCounts = useRef<Map<number, number>>(new Map());
 
   const {
     pinnedNodeId,
@@ -170,14 +184,224 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     }
   }, [sessionId, setNodes, setEdges, savePositions]);
 
-  // Poll for updates when status is "thinking" (auto mode)
+  // --- SSE streaming handlers ---
+
+  const handleNodeStart = useCallback(
+    (data: SSENodeStart) => {
+      const { id, layer, type, parent_ids } = data;
+      const count = (layerNodeCounts.current.get(layer) ?? 0) + 1;
+      layerNodeCounts.current.set(layer, count);
+      const idx = count - 1;
+
+      // Re-space existing nodes on this layer
+      setNodes((prev) => {
+        const updated = prev.map((n) => {
+          if (n.data.layer !== layer) return n;
+          const existingIdx = prev
+            .filter((p) => p.data.layer === layer)
+            .indexOf(n);
+          const pos = concentricPosition(layer, existingIdx, count);
+          positionMap.current.set(n.id, pos);
+          return { ...n, position: pos };
+        });
+
+        // Add the new streaming node
+        const pos = concentricPosition(layer, idx, count);
+        positionMap.current.set(id, pos);
+        const newNode: RFNode = {
+          id,
+          type: "streaming",
+          position: pos,
+          data: {
+            label: "",
+            type,
+            layer,
+            selected: true,
+            reasoning: "",
+            streaming: true,
+            parent_ids,
+          },
+          style: nodeStyle(type, true, layer),
+        };
+        return [...updated, newNode];
+      });
+
+      // Also track in session
+      setSession((prev) => {
+        if (!prev) return prev;
+        const newThinkingNode: ThinkingNode = {
+          id,
+          layer,
+          type: type as ThinkingNode["type"],
+          content: "",
+          reasoning: "",
+          sources: [],
+          parents: parent_ids,
+          selected: true,
+          metadata: {},
+        };
+        return {
+          ...prev,
+          nodes: [...prev.nodes, newThinkingNode],
+          current_layer: Math.max(prev.current_layer, layer),
+        };
+      });
+    },
+    [setNodes],
+  );
+
+  const handleNodeText = useCallback(
+    (data: SSENodeText) => {
+      const { id, field, delta } = data;
+      setNodes((prev) =>
+        prev.map((n) => {
+          if (n.id !== id) return n;
+          if (field === "content") {
+            return {
+              ...n,
+              data: { ...n.data, label: (n.data.label ?? "") + delta },
+            };
+          }
+          return {
+            ...n,
+            data: { ...n.data, reasoning: (n.data.reasoning ?? "") + delta },
+          };
+        }),
+      );
+
+      // Keep session in sync
+      setSession((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          nodes: prev.nodes.map((n) => {
+            if (n.id !== id) return n;
+            if (field === "content")
+              return { ...n, content: n.content + delta };
+            return { ...n, reasoning: n.reasoning + delta };
+          }),
+        };
+      });
+    },
+    [setNodes],
+  );
+
+  const handleNodeComplete = useCallback(
+    (data: SSENodeComplete) => {
+      const { id, confidence, metadata } = data;
+      setNodes((prev) =>
+        prev.map((n) => {
+          if (n.id !== id) return n;
+          return {
+            ...n,
+            data: { ...n.data, streaming: false, confidence },
+          };
+        }),
+      );
+
+      setSession((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          nodes: prev.nodes.map((n) =>
+            n.id !== id
+              ? n
+              : { ...n, metadata: { ...n.metadata, ...metadata, confidence } },
+          ),
+        };
+      });
+    },
+    [setNodes],
+  );
+
+  const handleEdges = useCallback(
+    (data: ThinkingEdge[]) => {
+      const newEdges: RFEdge[] = data.map((e, i) => {
+        const isMatch = e.relationship === "matches";
+        const isConfirm =
+          e.relationship === "compounds" || e.relationship === "causes";
+        return {
+          id: `sse-e-${Date.now()}-${i}-${e.source}-${e.target}`,
+          source: e.source,
+          target: e.target,
+          label: e.relationship,
+          type: "smoothstep",
+          animated: true,
+          markerEnd: {
+            type: "arrowclosed" as const,
+            color: isMatch
+              ? "rgba(34, 197, 94, 0.6)"
+              : "rgba(255, 255, 255, 0.3)",
+            width: 15,
+            height: 15,
+          },
+          style: {
+            stroke: isMatch
+              ? "rgba(34, 197, 94, 0.4)"
+              : isConfirm
+                ? "rgba(255, 255, 255, 0.2)"
+                : "rgba(107, 115, 148, 0.3)",
+            strokeWidth: isMatch ? 2 : 1.5,
+          },
+          labelStyle: {
+            fill: isMatch ? "#86efac" : "#6b7394",
+            fontSize: 10,
+          },
+        };
+      });
+      setEdges((prev) => [...prev, ...newEdges]);
+
+      // Keep session edges in sync
+      setSession((prev) => {
+        if (!prev) return prev;
+        return { ...prev, edges: [...prev.edges, ...data] };
+      });
+    },
+    [setEdges],
+  );
+
+  const handleLayerComplete = useCallback((data: SSELayerComplete) => {
+    setSession((prev) => {
+      if (!prev) return prev;
+      return { ...prev, current_layer: data.layer };
+    });
+    log.info("Layer", data.layer, "complete:", data.controller.summary);
+  }, []);
+
+  const handleSessionComplete = useCallback((data: SSESessionComplete) => {
+    setSession((prev) => {
+      if (!prev) return prev;
+      return { ...prev, status: data.status as ThinkingSession["status"] };
+    });
+    setIsThinking(false);
+    log.info("Session complete:", data.status);
+  }, []);
+
+  // Wire SSE hook — active only during "thinking" status
+  const { connected } = useSSESession(
+    session?.status === "thinking" ? sessionId : null,
+    {
+      onNodeStart: handleNodeStart,
+      onNodeText: handleNodeText,
+      onNodeComplete: handleNodeComplete,
+      onEdges: handleEdges,
+      onLayerComplete: handleLayerComplete,
+      onSessionComplete: handleSessionComplete,
+      onError: (err) => log.error("SSE error:", err.message),
+    },
+  );
+
+  // Sync isThinking with session status
   useEffect(() => {
-    if (session?.status !== "thinking") return;
-    const interval = setInterval(() => {
-      loadSessionIncremental();
-    }, 2000);
+    setIsThinking(session?.status === "thinking");
+  }, [session?.status]);
+
+  // Polling fallback — only when SSE is not connected
+  useEffect(() => {
+    if (connected || session?.status !== "thinking") return;
+    const interval = setInterval(() => loadSessionIncremental(), 2000);
     return () => clearInterval(interval);
-  }, [session?.status, loadSessionIncremental]);
+  }, [connected, session?.status, loadSessionIncremental]);
 
   // Step to next layer
   const handleStep = useCallback(async () => {
@@ -391,6 +615,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
 
       {/* React Flow graph */}
       <ReactFlow
+        nodeTypes={nodeTypes}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
