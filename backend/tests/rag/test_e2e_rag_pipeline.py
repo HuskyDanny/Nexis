@@ -116,7 +116,7 @@ class TestFullPipeline:
         assert doc["session_id"] == "session_A"
         assert doc["market"] == "US"
         assert doc["indexed"] is True
-        print(f"  ✓ MongoDB: node e2e_001 persisted with indexed=True")
+        print("  ✓ MongoDB: node e2e_001 persisted with indexed=True")
 
     async def test_persist_indexes_node_in_qdrant(
         self, persistence, qdrant_store, embedding, sparse
@@ -139,7 +139,7 @@ class TestFullPipeline:
         )
         ids = [r["id"] for r in results]
         assert "e2e_002" in ids, f"Node not found in Qdrant. Got IDs: {ids}"
-        print(f"  ✓ Qdrant: node e2e_002 indexed and searchable")
+        print("  ✓ Qdrant: node e2e_002 indexed and searchable")
 
     async def test_search_with_filters(self, persistence, search):
         """Step 3: Search service filters work against real stores."""
@@ -237,7 +237,7 @@ class TestFullPipeline:
         assert (
             "e2e_excl" not in result_ids
         ), f"Session exclusion failed — found own node. Got: {result_ids}"
-        print(f"  ✓ Session exclusion: own nodes correctly filtered out")
+        print("  ✓ Session exclusion: own nodes correctly filtered out")
 
     async def test_decay_ranking(self, persistence, search):
         """Step 6: Newer nodes rank higher than older ones after decay."""
