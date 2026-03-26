@@ -10,9 +10,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     environment:
       MONGODB_URL: mongodb://mongodb:27017/financial_agent_v2
       REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
       ENVIRONMENT: development
     # Dev override: use reload mode
     command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -56,6 +59,16 @@ services:
       timeout: 5s
       retries: 5
 
+  qdrant:
+    image: qdrant/qdrant:v1.14.0
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
 volumes:
   mongodb_data:
   redis_data:
+  qdrant_data:
