@@ -53,8 +53,6 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
 
     yield
     log.info("Shutting down")
-    from src.rag.dependencies import close_rag_services
-
     await close_rag_services()
     await redis_client.close()
     await mongodb.close()

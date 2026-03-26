@@ -3,13 +3,6 @@
 import pytest
 from unittest.mock import AsyncMock
 
-from src.rag.config import RAGConfig
-from src.rag.fakes import (
-    FakeEmbedding,
-    FakeSparseEncoder,
-    FakeVectorStore,
-    FakeNodeRepo,
-)
 from src.rag.persistence import NodePersistenceService
 
 

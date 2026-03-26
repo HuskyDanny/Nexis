@@ -1,9 +1,7 @@
 """Tests for NodeSearchService search + decay re-ranking."""
 
 import pytest
-from datetime import datetime, timezone, timedelta
 
-from src.rag.config import RAGConfig
 from src.rag.fakes import FakeEmbedding, FakeSparseEncoder, FakeVectorStore
 from src.rag.search import NodeSearchService
 

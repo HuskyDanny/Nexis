@@ -1,7 +1,6 @@
 """Agent tool for searching the node knowledge base via RAG."""
 
 import asyncio
-import concurrent.futures
 
 from crewai.tools import BaseTool
 from pydantic import Field
@@ -47,37 +46,29 @@ class SearchNodesTool(BaseTool):
         market: str | None = None,
         limit: int = 20,
     ) -> list[dict]:
-        """Sync wrapper for CrewAI compatibility."""
+        """Sync wrapper for CrewAI compatibility.
+
+        Uses the existing event loop when available (via run_coroutine_threadsafe)
+        to avoid creating a second loop that conflicts with singleton async clients.
+        Falls back to asyncio.run() only when no loop is running.
+        """
+        coro = self.arun(
+            query=query,
+            node_type=node_type,
+            sector=sector,
+            min_confidence=min_confidence,
+            date_from=date_from,
+            date_to=date_to,
+            market=market,
+            limit=limit,
+        )
         try:
-            asyncio.get_running_loop()
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(
-                    asyncio.run,
-                    self.arun(
-                        query=query,
-                        node_type=node_type,
-                        sector=sector,
-                        min_confidence=min_confidence,
-                        date_from=date_from,
-                        date_to=date_to,
-                        market=market,
-                        limit=limit,
-                    ),
-                )
-                return future.result()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
-            return asyncio.run(
-                self.arun(
-                    query=query,
-                    node_type=node_type,
-                    sector=sector,
-                    min_confidence=min_confidence,
-                    date_from=date_from,
-                    date_to=date_to,
-                    market=market,
-                    limit=limit,
-                )
-            )
+            return asyncio.run(coro)
+        # Schedule on the existing loop from a worker thread
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result()
 
     async def arun(
         self,

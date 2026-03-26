@@ -6,7 +6,7 @@ import hashlib
 import struct
 from datetime import datetime
 
-from src.rag.protocols import (
+from src.rag.protocols import (  # noqa: F401 — protocol classes used for duck-typing reference
     EmbeddingProvider,
     NodeRepository,
     SparseEncoder,
@@ -42,7 +42,13 @@ class FakeSparseEncoder:
         tokens = text.lower().split()
         if not tokens:
             return [], []
-        indices = [abs(hash(t)) % 50000 for t in tokens]
+        indices = [
+            int.from_bytes(
+                hashlib.sha256(t.encode("utf-8")).digest()[:8], "big"
+            )
+            % 50000
+            for t in tokens
+        ]
         values = [1.0] * len(tokens)
         return indices, values
 
@@ -88,10 +94,10 @@ class FakeVectorStore:
                 if payload.get("confidence", 0) < value:
                     return False
             elif key == "date_from":
-                if payload.get("date", "") < value:
+                if payload.get("date", "")[:10] < value[:10]:
                     return False
             elif key == "date_to":
-                if payload.get("date", "9999") > value:
+                if payload.get("date", "9999")[:10] > value[:10]:
                     return False
             elif isinstance(value, list):
                 if payload.get(key) not in value:

@@ -1,13 +1,6 @@
 """Tests that fakes comply with protocols."""
 
-import pytest
 
-from src.rag.protocols import (
-    EmbeddingProvider,
-    SparseEncoder,
-    VectorStore,
-    NodeRepository,
-)
 from src.rag.fakes import (
     FakeEmbedding,
     FakeSparseEncoder,

@@ -151,7 +151,7 @@ class NodePersistenceService:
                 "confidence": doc.get("confidence", 50),
                 "layer": doc.get("layer", 0),
                 "market": doc.get("market"),
-                "date": doc.get("date"),
+                "date": f"{doc.get('date', '2020-01-01')}T00:00:00Z",
                 "session_id": doc.get("session_id"),
                 "content": doc.get("content", ""),
                 "reasoning": doc.get("reasoning", ""),

@@ -29,6 +29,11 @@ from src.rag.config import RAGConfig
 log = logging.getLogger("rag.qdrant")
 
 
+def _date_to_datetime_str(date_str: str) -> str:
+    """Convert 'YYYY-MM-DD' to ISO datetime string for Qdrant datetime fields."""
+    return f"{date_str}T00:00:00Z"
+
+
 class QdrantVectorStore:
     def __init__(self, url: str, config: RAGConfig):
         self.client = AsyncQdrantClient(url=url)
@@ -54,10 +59,13 @@ class QdrantVectorStore:
                 deleted_threshold=0.2, vacuum_min_vector_number=1000
             ),
         )
-        for field in ["node_type", "sector", "market", "session_id", "date"]:
+        for field in ["node_type", "sector", "market", "session_id"]:
             await self.client.create_payload_index(
                 collection_name=collection, field_name=field, field_schema="keyword"
             )
+        await self.client.create_payload_index(
+            collection_name=collection, field_name="date", field_schema="datetime"
+        )
         for field in ["confidence", "layer"]:
             await self.client.create_payload_index(
                 collection_name=collection, field_name=field, field_schema="integer"
@@ -134,9 +142,19 @@ class QdrantVectorStore:
                     FieldCondition(key="confidence", range=Range(gte=value))
                 )
             elif key == "date_from":
-                conditions.append(FieldCondition(key="date", range=Range(gte=value)))
+                conditions.append(
+                    FieldCondition(
+                        key="date",
+                        range=Range(gte=_date_to_datetime_str(value)),
+                    )
+                )
             elif key == "date_to":
-                conditions.append(FieldCondition(key="date", range=Range(lte=value)))
+                conditions.append(
+                    FieldCondition(
+                        key="date",
+                        range=Range(lte=_date_to_datetime_str(value)),
+                    )
+                )
             elif isinstance(value, list):
                 conditions.append(FieldCondition(key=key, match=MatchAny(any=value)))
             else:

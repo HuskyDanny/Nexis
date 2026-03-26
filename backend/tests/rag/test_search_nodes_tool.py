@@ -1,10 +1,7 @@
 """Tests for SearchNodesTool CrewAI wrapper."""
 
 import pytest
-from unittest.mock import AsyncMock, patch
 
-from src.rag.config import RAGConfig
-from src.rag.fakes import FakeEmbedding, FakeSparseEncoder, FakeVectorStore
 from src.rag.search import NodeSearchService
 from src.agents.tools.search_nodes import SearchNodesTool
 

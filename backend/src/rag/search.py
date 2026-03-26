@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 
+from src.core.logger import get_logger
 from src.rag.config import RAGConfig
 from src.rag.decay import decay_score
 from src.rag.protocols import EmbeddingProvider, SparseEncoder, VectorStore
 
-log = logging.getLogger("rag.search")
+log = get_logger("rag.search")
 
 
 class NodeSearchService:
@@ -83,7 +83,9 @@ class NodeSearchService:
 
     @staticmethod
     def _parse_date(date_str: str) -> datetime:
-        try:
-            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except (ValueError, TypeError):
-            return datetime(2020, 1, 1, tzinfo=timezone.utc)
+        for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                continue
+        return datetime(2020, 1, 1, tzinfo=timezone.utc)
