@@ -216,9 +216,9 @@ async def run_pipeline(
                     market = seeds[0].get(
                         "market", seeds[0].get("metadata", {}).get("market", "US")
                     )
-                    date = seeds[0].get(
-                        "date", seeds[0].get("metadata", {}).get("date", "")
-                    )
+                    date = seeds[0].get("date") or seeds[0].get(
+                        "metadata", {}
+                    ).get("date") or ""
                 await persistence.persist_batch(
                     all_new_nodes,
                     session_id=session_id,
