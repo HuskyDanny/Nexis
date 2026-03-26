@@ -41,8 +41,21 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
         log.info("Redis connected")
     except Exception as e:
         log.warning("Redis connection failed (non-fatal): %s", e)
+
+    # Connect Qdrant + initialize RAG services
+    from src.rag.dependencies import init_rag_services, close_rag_services
+
+    try:
+        await init_rag_services()
+        log.info("RAG services initialized")
+    except Exception as e:
+        log.warning("RAG initialization failed (non-fatal): %s", e)
+
     yield
     log.info("Shutting down")
+    from src.rag.dependencies import close_rag_services
+
+    await close_rag_services()
     await redis_client.close()
     await mongodb.close()
 

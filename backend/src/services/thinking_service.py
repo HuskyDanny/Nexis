@@ -78,6 +78,7 @@ async def run_layer(
     layer: int,
     max_depth: int,
     confidence_threshold: float = 35,
+    session_id: str = "",
 ) -> LayerResult:
     """Run one layer of the pipeline: Thinker -> Matcher -> Controller.
 
@@ -95,6 +96,7 @@ async def run_layer(
                 chain_summary=chain_summary,
                 news_pool=news_pool,
                 layer=layer,
+                session_id=session_id,
             )
         )
     except Exception as e:
@@ -103,7 +105,9 @@ async def run_layer(
 
     if not effect_nodes:
         log.info("Thinker produced no effects at layer %d", layer)
-        return _empty_layer_result("Thinker produced no effects", {"thinker": thinker_tokens})
+        return _empty_layer_result(
+            "Thinker produced no effects", {"thinker": thinker_tokens}
+        )
 
     all_edges = list(effect_edges) + list(fetch_edges)
 
@@ -191,9 +195,33 @@ async def run_pipeline(
             value_pool=value_pool,
             layer=layer,
             max_depth=max_depth,
+            session_id=session_id,
         )
 
         await on_layer_complete(layer, result)
+
+        # Persist nodes to RAG store (best-effort)
+        try:
+            from src.rag.dependencies import get_persistence
+
+            persistence = get_persistence()
+            all_new_nodes = (
+                result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
+            )
+            if all_new_nodes:
+                # Get market and date from seeds
+                market = (
+                    seeds[0].get("metadata", {}).get("market", "US") if seeds else "US"
+                )
+                date = seeds[0].get("metadata", {}).get("date", "") if seeds else ""
+                await persistence.persist_batch(
+                    all_new_nodes,
+                    session_id=session_id,
+                    market=market,
+                    date=date,
+                )
+        except Exception as e:
+            log.warning("RAG persistence failed (non-fatal): %s", e)
 
         # Accumulate this layer's nodes for future parent collection
         this_layer_nodes = (

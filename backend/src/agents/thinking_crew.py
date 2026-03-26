@@ -17,6 +17,7 @@ from src.agents.skills.base import build_system_prompt_with_skills
 from src.agents.tools.fetch_news import FetchNewsTool
 from src.agents.thinking_helpers import (
     CONFIDENCE_THRESHOLD,
+    KNOWLEDGE_REUSE_SKILL,
     MATCHER_SKILLS,
     THINKER_SKILLS,
     convergence_score,
@@ -47,6 +48,7 @@ def run_thinker(
     chain_summary: str,
     news_pool: list[dict],
     layer: int,
+    session_id: str = "",
 ) -> tuple[list[dict], list[dict], list[dict], list[dict], int]:
     """Trace causal effects one layer deeper.
 
@@ -57,13 +59,29 @@ def run_thinker(
 
     tokens = 0
     try:
-        system_prompt = build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
+        system_prompt = (
+            build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
+            + "\n\n"
+            + KNOWLEDGE_REUSE_SKILL
+        )
+        # Build tool list — prefer search_nodes (free, fast) alongside fetch_news
+        try:
+            from src.rag.dependencies import get_search
+            from src.agents.tools.search_nodes import SearchNodesTool
+
+            search_svc = get_search()
+            tools = [
+                SearchNodesTool(search_service=search_svc, session_id=session_id),
+                FetchNewsTool(),
+            ]
+        except (RuntimeError, ImportError):
+            tools = [FetchNewsTool()]  # RAG not initialized, fallback
         thinker = Agent(
             role="Financial Effects Analyst",
             goal="Identify causal market effects using your analytical skills",
             backstory=system_prompt,
             llm=get_main_llm(),
-            tools=[FetchNewsTool()],
+            tools=tools,
             verbose=_is_debug(),
         )
 
@@ -120,9 +138,7 @@ def run_thinker(
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
 
-        tokens = (
-            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
-        )
+        tokens = getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
 
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
@@ -144,7 +160,13 @@ def run_thinker(
         n_fetch = len(fetch_nodes)
         log.info(
             "THINKER L%d | skills=%d | %.1fs | parsed=%d effects, %d fetch | prompt=%d chars | tokens=%d",
-            layer, len(THINKER_SKILLS), elapsed, n_effects, n_fetch, prompt_chars, tokens,
+            layer,
+            len(THINKER_SKILLS),
+            elapsed,
+            n_effects,
+            n_fetch,
+            prompt_chars,
+            tokens,
         )
         return effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens
 
@@ -309,9 +331,7 @@ def run_matcher(
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
 
-        tokens = (
-            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
-        )
+        tokens = getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
 
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
@@ -333,7 +353,12 @@ def run_matcher(
         n_built = len(opp_nodes)
         log.info(
             "MATCHER | skills=%d | %.1fs | parsed=%d, built=%d opportunities | prompt=%d chars | tokens=%d",
-            len(MATCHER_SKILLS), elapsed, n_parsed, n_built, prompt_chars, tokens,
+            len(MATCHER_SKILLS),
+            elapsed,
+            n_parsed,
+            n_built,
+            prompt_chars,
+            tokens,
         )
         return opp_nodes, edges, tokens
 
@@ -494,9 +519,7 @@ def run_controller(
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
 
-        tokens = (
-            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
-        )
+        tokens = getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
 
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
@@ -516,14 +539,26 @@ def run_controller(
             }, tokens
 
         ctrl_result = {
-            "continue": bool(parsed.get("continue", parsed.get("continue_decision", False))),
+            "continue": bool(
+                parsed.get("continue", parsed.get("continue_decision", False))
+            ),
             "reasoning": parsed.get("reasoning", ""),
             "summary": parsed.get("summary", chain_summary),
         }
-        _s = str(ctrl_result["summary"]).replace("\n", " ").replace("\r", " ").replace('"', '\\"')[:80]
+        _s = (
+            str(ctrl_result["summary"])
+            .replace("\n", " ")
+            .replace("\r", " ")
+            .replace('"', '\\"')[:80]
+        )
         log.info(
             'CONTROLLER L%d | %.1fs | continue=%s | prompt=%d chars | tokens=%d | summary="%s"',
-            layer, elapsed, ctrl_result["continue"], prompt_chars, tokens, _s,
+            layer,
+            elapsed,
+            ctrl_result["continue"],
+            prompt_chars,
+            tokens,
+            _s,
         )
         return ctrl_result, tokens
 
