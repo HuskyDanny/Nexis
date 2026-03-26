@@ -1,14 +1,49 @@
 """Agent tool for searching the node knowledge base via RAG."""
 
+from __future__ import annotations
+
 import asyncio
+from typing import Type
 
 from crewai.tools import BaseTool
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from src.core.logger import get_logger
 from src.rag.search import NodeSearchService
 
 log = get_logger("search_nodes_tool")
+
+
+class SearchNodesInput(BaseModel):
+    """Input schema for the search_nodes tool. Pydantic Field descriptions
+    are auto-injected into the tool schema sent to the LLM."""
+
+    query: str = Field(
+        ..., description="Semantic search text — describe what you're looking for"
+    )
+    node_type: str | None = Field(
+        default=None,
+        description="Filter by node type: 'effect', 'opportunity', 'news', or 'fetch'",
+    )
+    sector: str | None = Field(
+        default=None,
+        description="Filter by sector, e.g. 'technology', 'energy', 'healthcare'",
+    )
+    min_confidence: int | None = Field(
+        default=None, ge=0, le=100, description="Minimum confidence score (0-100)"
+    )
+    date_from: str | None = Field(
+        default=None, description="Earliest date filter (YYYY-MM-DD)"
+    )
+    date_to: str | None = Field(
+        default=None, description="Latest date filter (YYYY-MM-DD)"
+    )
+    market: str | None = Field(
+        default=None, description="Filter by market: 'US' or 'CN'"
+    )
+    limit: int = Field(
+        default=20, ge=1, le=100, description="Maximum number of results to return"
+    )
 
 
 class SearchNodesTool(BaseTool):
@@ -18,17 +53,9 @@ class SearchNodesTool(BaseTool):
         "opportunities, news, and fetch results from prior sessions. "
         "This is fast, free (no API cost), and reuses existing analysis. "
         "Prefer this tool BEFORE fetching live news. Use filters to narrow "
-        "results to what's relevant for your current reasoning.\n\n"
-        "Parameters:\n"
-        "- query (required): semantic search text\n"
-        "- node_type: 'effect', 'opportunity', 'news', or 'fetch'\n"
-        "- sector: e.g. 'technology', 'energy', 'healthcare'\n"
-        "- min_confidence: minimum confidence score (0-100)\n"
-        "- date_from: earliest date (YYYY-MM-DD)\n"
-        "- date_to: latest date (YYYY-MM-DD)\n"
-        "- market: 'US' or 'CN'\n"
-        "- limit: max results (default 20)"
+        "results to what's relevant for your current reasoning."
     )
+    args_schema: Type[BaseModel] = SearchNodesInput
 
     search_service: NodeSearchService = Field(exclude=True)
     session_id: str = Field(exclude=True)
