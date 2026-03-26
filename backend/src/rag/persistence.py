@@ -61,24 +61,35 @@ class NodePersistenceService:
         market: str,
         date: str,
     ) -> None:
-        """Persist multiple nodes sequentially."""
-        for node in nodes:
-            await self.persist_node(
-                node, session_id=session_id, market=market, date=date
+        """Persist multiple nodes concurrently."""
+        import asyncio
+
+        await asyncio.gather(
+            *(
+                self.persist_node(node, session_id=session_id, market=market, date=date)
+                for node in nodes
             )
+        )
 
     async def reconcile(self) -> int:
         """Find unindexed nodes in MongoDB and re-attempt Qdrant indexing."""
+        import asyncio
+
         unindexed = await self.node_repo.find_unindexed()
-        indexed_count = 0
-        for doc in unindexed:
+        if not unindexed:
+            return 0
+
+        async def _reconcile_one(doc: dict) -> bool:
             try:
                 await self._index_doc(doc)
                 await self.node_repo.mark_indexed(doc["id"], True)
-                indexed_count += 1
+                return True
             except Exception as e:
                 log.warning("Reconcile failed for node %s: %s", doc["id"], e)
-        return indexed_count
+                return False
+
+        results = await asyncio.gather(*(_reconcile_one(d) for d in unindexed))
+        return sum(results)
 
     async def prune(self) -> int:
         """Remove nodes older than prune_max_age_days from both stores.
