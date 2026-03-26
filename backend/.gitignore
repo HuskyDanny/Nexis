@@ -5,6 +5,7 @@ __pycache__/
 dist/
 build/
 .env
+.venv/
 
 # Benchmark traces (regenerated on demand)
 tests/benchmark/traces/**/*.json
