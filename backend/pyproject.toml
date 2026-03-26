@@ -30,6 +30,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "benchmark: Benchmark tests (deselect with '-m not benchmark')",
+    "integration: Integration tests requiring Docker services (deselect with '-m not integration')",
 ]
 
 [project.optional-dependencies]

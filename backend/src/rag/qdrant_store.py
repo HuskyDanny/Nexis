@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
@@ -27,6 +28,14 @@ from qdrant_client.models import (
 from src.rag.config import RAGConfig
 
 log = logging.getLogger("rag.qdrant")
+
+# Namespace UUID for deterministic ID generation from string node IDs
+_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+
+
+def _str_to_uuid(s: str) -> str:
+    """Convert a string ID to a deterministic UUID string for Qdrant."""
+    return str(uuid.uuid5(_NAMESPACE, s))
 
 
 def _date_to_datetime_str(date_str: str) -> str:
@@ -76,16 +85,17 @@ class QdrantVectorStore:
         qdrant_points = []
         for p in points:
             sparse_data = p["vector"]["sparse"]
+            payload = {**p["payload"], "_original_id": p["id"]}
             qdrant_points.append(
                 PointStruct(
-                    id=p["id"],
+                    id=_str_to_uuid(p["id"]),
                     vector={
                         "dense": p["vector"]["dense"],
                         "sparse": SparseVector(
                             indices=sparse_data[0], values=sparse_data[1]
                         ),
                     },
-                    payload=p["payload"],
+                    payload=payload,
                 )
             )
         await self.client.upsert(collection_name=collection, points=qdrant_points)
@@ -114,15 +124,18 @@ class QdrantVectorStore:
             limit=limit,
             with_payload=True,
         )
-        return [
-            {"id": str(pt.id), "score": pt.score, **(pt.payload or {})}
-            for pt in results.points
-        ]
+        out = []
+        for pt in results.points:
+            payload = dict(pt.payload or {})
+            original_id = payload.pop("_original_id", str(pt.id))
+            out.append({"id": original_id, "score": pt.score, **payload})
+        return out
 
     async def delete(self, collection: str, ids: list[str]) -> None:
         if not ids:
             return
-        await self.client.delete(collection_name=collection, points_selector=ids)
+        uuid_ids = [_str_to_uuid(id_) for id_ in ids]
+        await self.client.delete(collection_name=collection, points_selector=uuid_ids)
 
     async def close(self) -> None:
         await self.client.close()
