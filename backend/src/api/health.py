@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 from fastapi import APIRouter, Response
 
@@ -7,6 +8,8 @@ from src.database.mongodb import mongodb
 from src.database.redis import redis_client
 
 log = get_logger("api.health")
+
+HEALTH_CHECK_TIMEOUT = float(os.environ.get("HEALTH_CHECK_TIMEOUT", "2.0"))
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
@@ -22,9 +25,9 @@ async def readiness(response: Response):
     """Readiness probe — checks MongoDB and Redis connectivity."""
     checks: dict[str, str] = {}
 
-    # MongoDB check with 2s timeout
+    # MongoDB check
     try:
-        await asyncio.wait_for(mongodb.db.command("ping"), timeout=2.0)
+        await asyncio.wait_for(mongodb.db.command("ping"), timeout=HEALTH_CHECK_TIMEOUT)
         checks["mongodb"] = "ok"
     except asyncio.TimeoutError:
         log.warning("MongoDB health check timed out", exc_info=True)
@@ -33,11 +36,11 @@ async def readiness(response: Response):
         log.warning("MongoDB health check failed", exc_info=True)
         checks["mongodb"] = "error: not connected"
 
-    # Redis check with 2s timeout
+    # Redis check
     try:
         if redis_client.client is None:
             raise RuntimeError("not connected")
-        await asyncio.wait_for(redis_client.client.ping(), timeout=2.0)
+        await asyncio.wait_for(redis_client.client.ping(), timeout=HEALTH_CHECK_TIMEOUT)
         checks["redis"] = "ok"
     except asyncio.TimeoutError:
         log.warning("Redis health check timed out", exc_info=True)
