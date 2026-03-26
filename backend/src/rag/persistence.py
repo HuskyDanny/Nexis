@@ -96,7 +96,7 @@ class NodePersistenceService:
 
         # Best-effort vector store cleanup — don't let Qdrant failure block MongoDB prune
         try:
-            await self.vector_store.delete("nodes", stale_ids)
+            await self.vector_store.delete(self.config.collection_name, stale_ids)
         except Exception as e:
             log.warning("Vector store delete failed during prune: %s", e)
 
@@ -157,4 +157,4 @@ class NodePersistenceService:
                 "reasoning": doc.get("reasoning", ""),
             },
         }
-        await self.vector_store.upsert("nodes", [point])
+        await self.vector_store.upsert(self.config.collection_name, [point])

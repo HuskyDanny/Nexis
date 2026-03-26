@@ -42,15 +42,15 @@ class FakeSparseEncoder:
         tokens = text.lower().split()
         if not tokens:
             return [], []
-        indices = [
-            int.from_bytes(
-                hashlib.sha256(t.encode("utf-8")).digest()[:8], "big"
+        # Deduplicate: Qdrant requires unique sparse indices
+        seen: dict[int, float] = {}
+        for t in tokens:
+            idx = (
+                int.from_bytes(hashlib.sha256(t.encode("utf-8")).digest()[:8], "big")
+                % 50000
             )
-            % 50000
-            for t in tokens
-        ]
-        values = [1.0] * len(tokens)
-        return indices, values
+            seen[idx] = seen.get(idx, 0.0) + 1.0
+        return list(seen.keys()), list(seen.values())
 
 
 class FakeVectorStore:

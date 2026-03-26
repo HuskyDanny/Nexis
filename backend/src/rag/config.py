@@ -22,7 +22,8 @@ class RAGConfig(BaseSettings):
     decay_half_life_opportunity: float = 5.0
     decay_half_life_fetch: float = 3.0
 
-    # Qdrant HNSW
+    # Qdrant
+    collection_name: str = "nodes"
     hnsw_m: int = 16
     hnsw_ef_construct: int = 100
 

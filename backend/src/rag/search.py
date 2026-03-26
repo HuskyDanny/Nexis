@@ -60,7 +60,7 @@ class NodeSearchService:
             filters["market"] = market
 
         raw_results = await self.vector_store.query(
-            "nodes",
+            self.config.collection_name,
             dense=dense,
             sparse=sparse,
             filters=filters,

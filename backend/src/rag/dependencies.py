@@ -39,7 +39,7 @@ async def init_rag_services() -> tuple[NodePersistenceService, NodeSearchService
     sparse = FastEmbedBM25()
 
     _qdrant = QdrantVectorStore(url=settings.qdrant_url, config=config)
-    await _qdrant.ensure_collection("nodes")
+    await _qdrant.ensure_collection(config.collection_name)
 
     node_repo = MongoNodeStoreRepo(mongodb.get_collection("node_store"))
     await node_repo.ensure_indexes()
