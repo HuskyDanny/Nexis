@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 
 const MIN_GAP_MS = 200;
 
@@ -10,32 +10,35 @@ export function useAnimationQueue() {
   const queue = useRef<(() => void)[]>([]);
   const lastRun = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushRef = useRef<() => void>(() => {});
 
-  const flush = useCallback(() => {
-    const now = Date.now();
-    const elapsed = now - lastRun.current;
+  useEffect(() => {
+    flushRef.current = () => {
+      const now = Date.now();
+      const elapsed = now - lastRun.current;
 
-    if (queue.current.length === 0) return;
+      if (queue.current.length === 0) return;
 
-    if (elapsed >= MIN_GAP_MS) {
-      const fn = queue.current.shift();
-      fn?.();
-      lastRun.current = Date.now();
-      if (queue.current.length > 0) {
-        timer.current = setTimeout(flush, MIN_GAP_MS);
+      if (elapsed >= MIN_GAP_MS) {
+        const fn = queue.current.shift();
+        fn?.();
+        lastRun.current = Date.now();
+        if (queue.current.length > 0) {
+          timer.current = setTimeout(() => flushRef.current(), MIN_GAP_MS);
+        }
+      } else {
+        timer.current = setTimeout(
+          () => flushRef.current(),
+          MIN_GAP_MS - elapsed,
+        );
       }
-    } else {
-      timer.current = setTimeout(flush, MIN_GAP_MS - elapsed);
-    }
-  }, []);
+    };
+  });
 
-  const enqueue = useCallback(
-    (fn: () => void) => {
-      queue.current.push(fn);
-      if (!timer.current) flush();
-    },
-    [flush],
-  );
+  const enqueue = useCallback((fn: () => void) => {
+    queue.current.push(fn);
+    if (!timer.current) flushRef.current();
+  }, []);
 
   return { enqueue };
 }

@@ -56,7 +56,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
   const [selectedNode, setSelectedNode] = useState<ThinkingNode | null>(null);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
-  const [isThinking, setIsThinking] = useState(false);
+  const [isPending, setIsPending] = useState(false);
   const positionMap = useRef<Map<string, { x: number; y: number }>>(new Map());
   const layerNodeCounts = useRef<Map<number, number>>(new Map());
 
@@ -373,7 +373,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       if (!prev) return prev;
       return { ...prev, status: data.status as ThinkingSession["status"] };
     });
-    setIsThinking(false);
+    setIsPending(false);
     log.info("Session complete:", data.status);
   }, []);
 
@@ -391,10 +391,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     },
   );
 
-  // Sync isThinking with session status
-  useEffect(() => {
-    setIsThinking(session?.status === "thinking");
-  }, [session?.status]);
+  const isThinking = session?.status === "thinking" || isPending;
 
   // Polling fallback — only when SSE is not connected
   useEffect(() => {
@@ -406,7 +403,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   // Step to next layer
   const handleStep = useCallback(async () => {
     if (isThinking || !session) return;
-    setIsThinking(true);
+    setIsPending(true);
     log.info("Stepping to layer", session.current_layer + 1);
     try {
       await graphApi.thinkStep(sessionId);
@@ -414,13 +411,13 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     } catch (err) {
       log.error("Step failed:", err);
     }
-    setIsThinking(false);
+    setIsPending(false);
   }, [sessionId, session, isThinking, loadSessionIncremental]);
 
   // Match against value pool
   const handleMatch = useCallback(async () => {
     if (isThinking || !session) return;
-    setIsThinking(true);
+    setIsPending(true);
     log.info("Matching against value pool");
     try {
       await graphApi.matchValues(sessionId);
@@ -428,7 +425,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     } catch (err) {
       log.error("Match failed:", err);
     }
-    setIsThinking(false);
+    setIsPending(false);
   }, [sessionId, session, isThinking, loadSessionIncremental]);
 
   // Pane click: useCallback to avoid stale closure in React Flow

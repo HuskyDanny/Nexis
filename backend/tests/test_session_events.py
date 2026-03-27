@@ -4,8 +4,6 @@ from src.services.session_events import (
     SessionRegistry,
     SessionEntry,
     SSEEvent,
-    MAX_QUEUE_SIZE,
-    WARN_QUEUE_SIZE,
 )
 
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ThinkingEdge } from "../types/thinking";
 
 export interface SSENodeStart {
@@ -54,67 +54,74 @@ export function useSSESession(
   const [connected, setConnected] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const retriesRef = useRef(0);
-  // Stabilize callbacks with ref — avoids reconnecting on every render
   const cbRef = useRef(callbacks);
-  cbRef.current = callbacks;
+  const connectRef = useRef<() => void>(() => {});
 
-  const connect = useCallback(() => {
-    if (!sessionId) return;
-    const url = `/api/thinking/${sessionId}/events`;
-    const es = new EventSource(url);
-    esRef.current = es;
+  // Sync callback ref in effect to avoid ref writes during render
+  useEffect(() => {
+    cbRef.current = callbacks;
+  });
 
-    es.addEventListener("node_start", (e: MessageEvent) => {
-      cbRef.current?.onNodeStart?.(JSON.parse(e.data));
-    });
-    es.addEventListener("node_text", (e: MessageEvent) => {
-      cbRef.current?.onNodeText?.(JSON.parse(e.data));
-    });
-    es.addEventListener("node_complete", (e: MessageEvent) => {
-      cbRef.current?.onNodeComplete?.(JSON.parse(e.data));
-    });
-    es.addEventListener("edges", (e: MessageEvent) => {
-      cbRef.current?.onEdges?.(JSON.parse(e.data));
-    });
-    es.addEventListener("layer_complete", (e: MessageEvent) => {
-      cbRef.current?.onLayerComplete?.(JSON.parse(e.data));
-    });
-    es.addEventListener("session_complete", (e: MessageEvent) => {
-      cbRef.current?.onSessionComplete?.(JSON.parse(e.data));
-      es.close();
-      setConnected(false);
-    });
-    es.addEventListener("error", (e: MessageEvent) => {
-      if (e.data) {
-        cbRef.current?.onError?.(JSON.parse(e.data));
-      }
-    });
+  // Sync connect function ref in effect
+  useEffect(() => {
+    connectRef.current = () => {
+      if (!sessionId) return;
+      const url = `/api/thinking/${sessionId}/events`;
+      const es = new EventSource(url);
+      esRef.current = es;
 
-    es.onopen = () => {
-      setConnected(true);
-      retriesRef.current = 0;
-    };
-    es.onerror = () => {
-      setConnected(false);
-      es.close();
-      if (retriesRef.current < MAX_RETRIES) {
-        retriesRef.current += 1;
-        setTimeout(connect, RETRY_DELAY_MS);
-      } else {
-        cbRef.current?.onError?.({
-          message: "SSE connection failed after retries",
-        });
-      }
+      es.addEventListener("node_start", (e: MessageEvent) => {
+        cbRef.current?.onNodeStart?.(JSON.parse(e.data));
+      });
+      es.addEventListener("node_text", (e: MessageEvent) => {
+        cbRef.current?.onNodeText?.(JSON.parse(e.data));
+      });
+      es.addEventListener("node_complete", (e: MessageEvent) => {
+        cbRef.current?.onNodeComplete?.(JSON.parse(e.data));
+      });
+      es.addEventListener("edges", (e: MessageEvent) => {
+        cbRef.current?.onEdges?.(JSON.parse(e.data));
+      });
+      es.addEventListener("layer_complete", (e: MessageEvent) => {
+        cbRef.current?.onLayerComplete?.(JSON.parse(e.data));
+      });
+      es.addEventListener("session_complete", (e: MessageEvent) => {
+        cbRef.current?.onSessionComplete?.(JSON.parse(e.data));
+        es.close();
+        setConnected(false);
+      });
+      es.addEventListener("error", (e: MessageEvent) => {
+        if (e.data) {
+          cbRef.current?.onError?.(JSON.parse(e.data));
+        }
+      });
+
+      es.onopen = () => {
+        setConnected(true);
+        retriesRef.current = 0;
+      };
+      es.onerror = () => {
+        setConnected(false);
+        es.close();
+        if (retriesRef.current < MAX_RETRIES) {
+          retriesRef.current += 1;
+          setTimeout(() => connectRef.current(), RETRY_DELAY_MS);
+        } else {
+          cbRef.current?.onError?.({
+            message: "SSE connection failed after retries",
+          });
+        }
+      };
     };
   }, [sessionId]);
 
   useEffect(() => {
-    connect();
+    connectRef.current();
     return () => {
       esRef.current?.close();
       setConnected(false);
     };
-  }, [connect]);
+  }, [sessionId]);
 
   return { connected };
 }
