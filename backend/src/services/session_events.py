@@ -12,6 +12,7 @@ log = get_logger("session_events")
 
 MAX_QUEUE_SIZE = 500
 WARN_QUEUE_SIZE = 100
+SESSION_TTL_S = 3600  # 1 hour
 
 
 @dataclass
@@ -39,7 +40,9 @@ class SSEEvent:
 class SessionEntry:
     """One active auto-run session."""
 
-    queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    queue: asyncio.Queue = field(
+        default_factory=lambda: asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
+    )
     task: Optional[asyncio.Task] = None
     created_at: float = field(default_factory=time.time)
 
@@ -71,7 +74,18 @@ class SessionRegistry:
         return len(self._sessions)
 
     async def health_check(self) -> None:
+        now = time.time()
         for sid, entry in list(self._sessions.items()):
+            # Evict completed/failed tasks
+            if entry.task and entry.task.done():
+                log.info("Session %s task done — evicting", sid)
+                self._sessions.pop(sid, None)
+                continue
+            # Evict stale sessions (TTL)
+            if now - entry.created_at > SESSION_TTL_S:
+                log.info("Session %s expired (TTL) — evicting", sid)
+                self.remove(sid)
+                continue
             qsize = entry.queue.qsize()
             if qsize > MAX_QUEUE_SIZE:
                 log.error("Session %s queue overflow (%d) — cancelling", sid, qsize)

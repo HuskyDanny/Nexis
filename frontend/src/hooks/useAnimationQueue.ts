@@ -17,7 +17,10 @@ export function useAnimationQueue() {
       const now = Date.now();
       const elapsed = now - lastRun.current;
 
-      if (queue.current.length === 0) return;
+      if (queue.current.length === 0) {
+        timer.current = null;
+        return;
+      }
 
       if (elapsed >= MIN_GAP_MS) {
         const fn = queue.current.shift();
@@ -25,6 +28,8 @@ export function useAnimationQueue() {
         lastRun.current = Date.now();
         if (queue.current.length > 0) {
           timer.current = setTimeout(() => flushRef.current(), MIN_GAP_MS);
+        } else {
+          timer.current = null;
         }
       } else {
         timer.current = setTimeout(
@@ -34,6 +39,13 @@ export function useAnimationQueue() {
       }
     };
   });
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
 
   const enqueue = useCallback((fn: () => void) => {
     queue.current.push(fn);

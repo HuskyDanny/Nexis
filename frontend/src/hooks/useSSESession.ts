@@ -1,44 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import type { ThinkingEdge } from "../types/thinking";
-
-export interface SSENodeStart {
-  id: string;
-  layer: number;
-  type: string;
-  parent_ids: string[];
-}
-
-export interface SSENodeText {
-  id: string;
-  field: "content" | "reasoning";
-  delta: string;
-}
-
-export interface SSENodeComplete {
-  id: string;
-  confidence: number;
-  metadata: Record<string, unknown>;
-}
-
-export interface SSELayerComplete {
-  layer: number;
-  controller: { continue: boolean; reasoning: string; summary: string };
-}
-
-export interface SSESessionComplete {
-  status: string;
-}
-
-export interface SSEError {
-  message: string;
-  layer?: number;
-}
+import type {
+  SSENodeStart,
+  SSENodeText,
+  SSENodeComplete,
+  SSELayerComplete,
+  SSESessionComplete,
+  SSEError,
+  SSEEdgesPayload,
+} from "../types/thinking";
 
 interface SSECallbacks {
   onNodeStart?: (data: SSENodeStart) => void;
   onNodeText?: (data: SSENodeText) => void;
   onNodeComplete?: (data: SSENodeComplete) => void;
-  onEdges?: (data: ThinkingEdge[]) => void;
+  onEdges?: (data: SSEEdgesPayload) => void;
   onLayerComplete?: (data: SSELayerComplete) => void;
   onSessionComplete?: (data: SSESessionComplete) => void;
   onError?: (data: SSEError) => void;
@@ -56,6 +31,7 @@ export function useSSESession(
   const retriesRef = useRef(0);
   const cbRef = useRef(callbacks);
   const connectRef = useRef<() => void>(() => {});
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync callback ref in effect to avoid ref writes during render
   useEffect(() => {
@@ -105,10 +81,13 @@ export function useSSESession(
         es.close();
         if (retriesRef.current < MAX_RETRIES) {
           retriesRef.current += 1;
-          setTimeout(() => connectRef.current(), RETRY_DELAY_MS);
+          timeoutRef.current = setTimeout(
+            () => connectRef.current(),
+            RETRY_DELAY_MS,
+          );
         } else {
           cbRef.current?.onError?.({
-            message: "SSE connection failed after retries",
+            error: "SSE connection failed after retries",
           });
         }
       };
@@ -119,6 +98,7 @@ export function useSSESession(
     connectRef.current();
     return () => {
       esRef.current?.close();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setConnected(false);
     };
   }, [sessionId]);

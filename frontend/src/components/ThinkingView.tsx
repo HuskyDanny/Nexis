@@ -15,7 +15,6 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { ThinkingSession, ThinkingNode } from "../types/thinking";
-import type { ThinkingEdge } from "../types/thinking";
 import {
   buildThinkingGraph,
   nodeStyle,
@@ -39,7 +38,8 @@ import type {
   SSENodeComplete,
   SSELayerComplete,
   SSESessionComplete,
-} from "../hooks/useSSESession";
+  SSEEdgesPayload,
+} from "../types/thinking";
 
 const log = createLogger("thinking-view");
 
@@ -315,7 +315,8 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
   );
 
   const handleEdges = useCallback(
-    (data: ThinkingEdge[]) => {
+    (payload: SSEEdgesPayload) => {
+      const data = payload.edges;
       const newEdges: RFEdge[] = data.map((e, i) => {
         const isMatch = e.relationship === "matches";
         const isConfirm =
@@ -387,7 +388,8 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       onEdges: handleEdges,
       onLayerComplete: handleLayerComplete,
       onSessionComplete: handleSessionComplete,
-      onError: (err) => log.error("SSE error:", err.message),
+      onError: (err) =>
+        log.error("SSE error:", err.error ?? err.message ?? String(err)),
     },
   );
 

@@ -52,27 +52,27 @@ class IncrementalEffectsParser:
         for i, effect in enumerate(effects):
             if i < self._completed_count:
                 continue
-            events.append({"type": "node_start", "data": {"index": i}})
-            content = effect.get("content", "")
-            if content:
-                events.append(
-                    {
-                        "type": "node_text",
-                        "data": {"index": i, "field": "content", "delta": content},
-                    }
-                )
-            reasoning = effect.get("reasoning", "")
-            if reasoning:
-                events.append(
-                    {
-                        "type": "node_text",
-                        "data": {
-                            "index": i,
-                            "field": "reasoning",
-                            "delta": reasoning,
-                        },
-                    }
-                )
+            # Only emit node_start if partial deltas haven't already done so
+            if i not in self._last_content_len:
+                events.append({"type": "node_start", "data": {"index": i}})
+            # Emit only remaining deltas (avoid duplicating already-streamed text)
+            for field_name in ("content", "reasoning"):
+                val = effect.get(field_name, "")
+                if not val:
+                    continue
+                prev_len = self._last_content_len.get(i, {}).get(field_name, 0)
+                if len(val) > prev_len:
+                    delta = val[prev_len:]
+                    events.append(
+                        {
+                            "type": "node_text",
+                            "data": {
+                                "index": i,
+                                "field": field_name,
+                                "delta": delta,
+                            },
+                        }
+                    )
             events.append({"type": "node_complete", "data": {"index": i, **effect}})
             self._completed_count = i + 1
 

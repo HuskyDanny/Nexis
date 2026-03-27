@@ -229,8 +229,11 @@ async def session_events(session_id: str, request: Request):
         try:
             while True:
                 if await request.is_disconnected():
-                    log.info("SSE client disconnected for %s", session_id)
-                    registry.remove(session_id)
+                    log.info(
+                        "SSE client disconnected for %s — stopping stream"
+                        " (pipeline continues)",
+                        session_id,
+                    )
                     return
 
                 entry = registry.get(session_id)
@@ -246,9 +249,8 @@ async def session_events(session_id: str, request: Request):
                 except asyncio.TimeoutError:
                     # Send keepalive comment
                     yield ": keepalive\n\n"
-        finally:
-            # Clean up registry on exit
-            registry.remove(session_id)
+        except GeneratorExit:
+            pass
 
     async def _replay_from_db(session_id: str):
         """Replay a completed session from MongoDB — instant, no animation."""
@@ -273,12 +275,19 @@ async def session_events(session_id: str, request: Request):
                     "id": node.get("id", ""),
                     "layer": layer,
                     "type": node_type,
+                    "parent_ids": node.get("parents", []),
                 },
                 id=event_id,
             ).serialize()
             yield SSEEvent(
                 event="node_complete",
-                data=node,
+                data={
+                    "id": node.get("id", ""),
+                    "confidence": node.get("metadata", {}).get(
+                        "confidence", node.get("confidence", 0)
+                    ),
+                    "metadata": node.get("metadata", {}),
+                },
                 id=f"{event_id}:done",
             ).serialize()
 

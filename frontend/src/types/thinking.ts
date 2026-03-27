@@ -66,6 +66,12 @@ export interface SSESessionComplete {
 }
 
 export interface SSEError {
-  message: string;
+  error: string;
+  message?: string;
   layer?: number;
+}
+
+export interface SSEEdgesPayload {
+  edges: ThinkingEdge[];
+  source?: string;
 }

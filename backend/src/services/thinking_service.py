@@ -208,7 +208,10 @@ async def run_layer_streaming(
     queue = entry.queue
 
     def _push(event: str, data) -> None:
-        queue.put_nowait(SSEEvent(event=event, data=data, id=uuid4().hex[:8]))
+        try:
+            queue.put_nowait(SSEEvent(event=event, data=data, id=uuid4().hex[:8]))
+        except asyncio.QueueFull:
+            log.warning("Session %s queue full, dropping event %s", session_id, event)
 
     try:
         # --- Thinker (streaming via LiteLLM) ---
@@ -224,6 +227,11 @@ async def run_layer_streaming(
             layer=layer,
         )
 
+        if litellm_acompletion is None:
+            raise RuntimeError(
+                "litellm is not installed — streaming thinker requires litellm"
+            )
+
         litellm_params = get_litellm_params()
         messages = [
             {"role": "system", "content": system_prompt},
@@ -232,6 +240,8 @@ async def run_layer_streaming(
 
         parser = IncrementalEffectsParser()
         full_text = ""
+        index_to_id: dict[int, str] = {}
+        parent_ids = [n["id"] for n in parent_nodes]
 
         response = await litellm_acompletion(
             messages=messages, stream=True, **litellm_params
@@ -245,7 +255,49 @@ async def run_layer_streaming(
             full_text += token
             events = parser.feed(token)
             for ev in events:
-                _push(ev["type"], ev["data"])
+                idx = ev["data"].get("index")
+                if ev["type"] == "node_start":
+                    node_id = uuid4().hex[:12]
+                    index_to_id[idx] = node_id
+                    _push(
+                        "node_start",
+                        {
+                            "id": node_id,
+                            "layer": layer,
+                            "type": "effect",
+                            "parent_ids": parent_ids,
+                        },
+                    )
+                elif ev["type"] == "node_text":
+                    node_id = index_to_id.get(idx, f"unknown-{idx}")
+                    _push(
+                        "node_text",
+                        {
+                            "id": node_id,
+                            "field": ev["data"]["field"],
+                            "delta": ev["data"]["delta"],
+                        },
+                    )
+                elif ev["type"] == "node_complete":
+                    node_id = index_to_id.get(idx, f"unknown-{idx}")
+                    _push(
+                        "node_complete",
+                        {
+                            "id": node_id,
+                            "confidence": ev["data"].get("confidence", 0),
+                            "metadata": {
+                                k: v
+                                for k, v in ev["data"].items()
+                                if k
+                                not in (
+                                    "index",
+                                    "content",
+                                    "reasoning",
+                                    "confidence",
+                                )
+                            },
+                        },
+                    )
 
         # Parse full response for node/edge construction
         parsed = parse_json_response(full_text)
