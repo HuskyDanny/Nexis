@@ -1,5 +1,7 @@
 """Tests for NodePersistenceService dual-write logic."""
 
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock
 
@@ -38,6 +40,7 @@ class TestPersistNode:
         await service.persist_node(
             _make_node(), session_id="s1", market="US", date="2026-03-26"
         )
+        await asyncio.sleep(0)  # let background indexing task complete
         assert await fake_repo.get("n1") is not None
         assert "n1" in fake_store.points
 
@@ -45,6 +48,7 @@ class TestPersistNode:
         await service.persist_node(
             _make_node(id_="n2"), session_id="s1", market="US", date="2026-03-26"
         )
+        await asyncio.sleep(0)  # let background indexing task complete
         doc = await fake_repo.get("n2")
         assert doc["session_id"] == "s1"
         assert doc["market"] == "US"
@@ -57,6 +61,7 @@ class TestPersistNode:
         await service.persist_node(
             _make_node(), session_id="s1", market="US", date="2026-03-26"
         )
+        await asyncio.sleep(0)  # let background indexing task complete
         point = fake_store.points["n1"]
         payload = point["payload"]
         assert payload["node_type"] == "effect"
@@ -106,6 +111,7 @@ class TestPersistBatch:
         await service.persist_batch(
             nodes, session_id="s1", market="US", date="2026-03-26"
         )
+        await asyncio.sleep(0)  # let background indexing tasks complete
         assert len(fake_repo.docs) == 5
         assert len(fake_store.points) == 5
 
@@ -153,6 +159,7 @@ class TestPrune:
         await service.persist_node(
             new_node, session_id="s2", market="US", date="2026-03-16"
         )
+        await asyncio.sleep(0)  # let background indexing tasks complete
 
         fake_repo.docs["old"]["created_at"] = old_date
         fake_repo.docs["new"]["created_at"] = new_date

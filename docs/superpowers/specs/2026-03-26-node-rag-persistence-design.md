@@ -169,7 +169,7 @@ class SearchNodesTool(BaseTool):
         query: str,                              # semantic search text (required)
         node_type: list[str] | None = None,       # filter: ["effect", "opportunity", ...]
         sector: str | None = None,                # filter: "technology", "energy", ...
-        min_confidence: int | None = None,         # filter: 0-100
+        min_confidence: float | None = None,       # filter: 0-100
         date_from: str | None = None,             # filter: "2026-03-20"
         date_to: str | None = None,               # filter: "2026-03-26"
         market: str | None = None,                # filter: "US", "CN"

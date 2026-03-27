@@ -39,19 +39,25 @@ class NodePersistenceService:
         market: str,
         date: str,
     ) -> None:
-        """Write node to MongoDB first (must succeed), then index to Qdrant (best-effort)."""
+        """Write node to MongoDB first (must succeed), then index to Qdrant as background task."""
+        import asyncio
+
         doc = self._build_doc(node, session_id=session_id, market=market, date=date)
 
         # MongoDB write — must succeed
         doc["indexed"] = False
         await self.node_repo.insert(doc)
 
-        # Qdrant indexing — best-effort; failure marks node as unindexed for reconciliation
+        # Qdrant indexing — fire-and-forget; failure leaves indexed=False for reconciliation
+        asyncio.create_task(self._background_index(doc))
+
+    async def _background_index(self, doc: dict) -> None:
+        """Index a doc to Qdrant in the background. Exceptions are logged, not propagated."""
         try:
             await self._index_doc(doc)
             await self.node_repo.mark_indexed(doc["id"], True)
         except Exception as e:
-            log.warning("Failed to index node %s: %s", doc["id"], e)
+            log.warning("Background index failed for node %s: %s", doc["id"], e)
 
     async def persist_batch(
         self,
@@ -61,15 +67,18 @@ class NodePersistenceService:
         market: str,
         date: str,
     ) -> None:
-        """Persist multiple nodes concurrently."""
+        """Persist multiple nodes concurrently with bounded concurrency."""
         import asyncio
 
-        await asyncio.gather(
-            *(
-                self.persist_node(node, session_id=session_id, market=market, date=date)
-                for node in nodes
-            )
-        )
+        sem = asyncio.Semaphore(5)
+
+        async def _limited(node: dict) -> None:
+            async with sem:
+                await self.persist_node(
+                    node, session_id=session_id, market=market, date=date
+                )
+
+        await asyncio.gather(*[_limited(n) for n in nodes])
 
     async def reconcile(self) -> int:
         """Find unindexed nodes in MongoDB and re-attempt Qdrant indexing."""

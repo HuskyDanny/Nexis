@@ -45,6 +45,7 @@ class TestRunLayer:
             value_pool=value_pool(),
             layer=1,
             max_depth=5,
+            session_id="test",
         )
         mock_thinker.assert_called_once()
         mock_matcher.assert_called_once()
@@ -72,6 +73,7 @@ class TestRunLayer:
             value_pool=value_pool(),
             layer=1,
             max_depth=5,
+            session_id="test",
         )
         assert result.effect_nodes == []
         assert result.controller_decision["continue"] is False
@@ -97,6 +99,7 @@ class TestRunLayer:
             value_pool=value_pool(),
             layer=1,
             max_depth=5,
+            session_id="test",
         )
         assert len(result.effect_nodes) == 1
         assert result.opportunity_nodes == []
@@ -122,6 +125,7 @@ class TestRunLayer:
             value_pool=value_pool(),
             layer=1,
             max_depth=5,
+            session_id="test",
         )
         assert r1.controller_decision["continue"] is True  # layer 1 < 3
 
@@ -136,6 +140,7 @@ class TestRunLayer:
             value_pool=value_pool(),
             layer=3,
             max_depth=5,
+            session_id="test",
         )
         assert r3.controller_decision["continue"] is False  # layer 3 >= 3
 
@@ -156,6 +161,7 @@ class TestRunLayer:
             value_pool=value_pool(),
             layer=1,
             max_depth=5,
+            session_id="test",
         )
         assert result.effect_nodes == []
         assert result.controller_decision["continue"] is False

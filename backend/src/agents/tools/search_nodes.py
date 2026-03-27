@@ -14,6 +14,8 @@ from src.rag.search import NodeSearchService
 
 log = get_logger("search_nodes_tool")
 
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
 
 class SearchNodesInput(BaseModel):
     """Input schema for the search_nodes tool. Pydantic Field descriptions
@@ -22,7 +24,7 @@ class SearchNodesInput(BaseModel):
     query: str = Field(
         ..., description="Semantic search text — describe what you're looking for"
     )
-    node_type: str | None = Field(
+    node_type: list[str] | None = Field(
         default=None,
         description="Filter by node type: 'effect', 'opportunity', 'news', or 'fetch'",
     )
@@ -30,7 +32,7 @@ class SearchNodesInput(BaseModel):
         default=None,
         description="Filter by sector, e.g. 'technology', 'energy', 'healthcare'",
     )
-    min_confidence: int | None = Field(
+    min_confidence: float | None = Field(
         default=None, ge=0, le=100, description="Minimum confidence score (0-100)"
     )
     date_from: str | None = Field(
@@ -66,9 +68,9 @@ class SearchNodesTool(BaseTool):
     def _run(
         self,
         query: str,
-        node_type: str | None = None,
+        node_type: list[str] | None = None,
         sector: str | None = None,
-        min_confidence: int | None = None,
+        min_confidence: float | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         market: str | None = None,
@@ -76,10 +78,15 @@ class SearchNodesTool(BaseTool):
     ) -> list[dict]:
         """Sync wrapper for CrewAI compatibility.
 
-        When a loop is already running (CrewAI context), runs the coroutine in a
-        fresh thread with its own event loop to avoid deadlocks. Falls back to
+        When a loop is already running (CrewAI context), offloads to a separate
+        thread via a module-level executor to avoid deadlocks. Falls back to
         asyncio.run() when no loop is running.
         """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
         coro = self.arun(
             query=query,
             node_type=node_type,
@@ -90,27 +97,26 @@ class SearchNodesTool(BaseTool):
             market=market,
             limit=limit,
         )
-        try:
-            asyncio.get_running_loop()
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, coro)
-                return future.result()
-        except RuntimeError:
+
+        if loop and loop.is_running():
+            future = _executor.submit(asyncio.run, coro)
+            return future.result()
+        else:
             return asyncio.run(coro)
 
     async def arun(
         self,
         query: str,
-        node_type: str | None = None,
+        node_type: list[str] | None = None,
         sector: str | None = None,
-        min_confidence: int | None = None,
+        min_confidence: float | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         market: str | None = None,
         limit: int = 20,
     ) -> list[dict]:
         """Async search implementation."""
-        type_list = [node_type] if isinstance(node_type, str) else node_type
+        type_list = node_type or []
 
         results = await self.search_service.search(
             query=query,

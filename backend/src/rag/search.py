@@ -32,7 +32,7 @@ class NodeSearchService:
         *,
         node_type: list[str] | None = None,
         sector: str | None = None,
-        min_confidence: int | None = None,
+        min_confidence: float | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         market: str | None = None,
