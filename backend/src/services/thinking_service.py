@@ -310,7 +310,18 @@ async def run_layer_streaming(
             _push("layer_complete", {"layer": layer, "reason": "no effects"})
             return _empty_layer_result("Thinker produced no effects")
 
+        # Remap batch IDs → streaming IDs so edges match frontend nodes
+        batch_to_stream = {
+            node["id"]: index_to_id[i]
+            for i, node in enumerate(effect_nodes)
+            if i in index_to_id
+        }
+        for node in effect_nodes:
+            node["id"] = batch_to_stream.get(node["id"], node["id"])
         all_edges = list(effect_edges) + list(fetch_edges)
+        for edge in all_edges:
+            edge["source"] = batch_to_stream.get(edge["source"], edge["source"])
+            edge["target"] = batch_to_stream.get(edge["target"], edge["target"])
 
         # Push edges from thinker
         _push("edges", {"edges": all_edges, "source": "thinker"})
@@ -433,11 +444,8 @@ async def run_pipeline(
 
         # Accumulate this layer's nodes for future parent collection
         all_layer_nodes.append(all_new_nodes)
-
-        # Update chain summary from controller
         chain_summary = result.controller_decision.get("summary", chain_summary)
 
-        # Termination: controller says stop or no effects produced
         if not result.controller_decision.get("continue", False):
             log.info(
                 "Pipeline stopping at layer %d: %s",

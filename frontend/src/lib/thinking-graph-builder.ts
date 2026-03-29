@@ -65,7 +65,7 @@ export function concentricPosition(
   layer: number,
   index: number,
   totalInLayer: number,
-  layerRadius: number = 180,
+  layerRadius: number = 250,
 ): { x: number; y: number } {
   if (layer === 0) {
     const angle = (index / Math.max(totalInLayer, 1)) * 2 * Math.PI;
@@ -83,9 +83,10 @@ export function buildThinkingGraph(
   edges: ThinkingEdge[],
   fixedPositions?: Map<string, { x: number; y: number }>,
 ): { rfNodes: RFNode[]; rfEdges: RFEdge[] } {
-  // Build React Flow nodes
+  // Build React Flow nodes — use StreamingNode type so confidence renders
   const rfNodes: RFNode[] = nodes.map((n) => ({
     id: n.id,
+    type: "streaming",
     position: { x: 0, y: 0 },
     data: {
       label: n.content,
@@ -93,6 +94,11 @@ export function buildThinkingGraph(
       layer: n.layer,
       selected: n.selected,
       reasoning: n.reasoning,
+      streaming: false,
+      confidence:
+        (n.metadata?.confidence as number) ??
+        (n as unknown as Record<string, unknown>).confidence ??
+        undefined,
     },
     style: nodeStyle(n.type, n.selected, n.layer),
   }));
@@ -133,12 +139,12 @@ export function buildThinkingGraph(
   // Apply concentric ring layout — strong repulsion to prevent overlap
   const layerMap = new Map(nodes.map((n) => [n.id, n.layer]));
   const layoutNodes = layoutGraph(rfNodes, rfEdges, {
-    chargeStrength: -600,
-    linkDistance: 150,
-    collideRadius: 100,
-    iterations: 150,
+    chargeStrength: -800,
+    linkDistance: 200,
+    collideRadius: 130,
+    iterations: 200,
     layerMap,
-    layerRadius: 180,
+    layerRadius: 250,
     fixedPositions,
   });
 
