@@ -201,6 +201,7 @@ async def think_step(session_id: str):
             value_pool=value_pool,
             layer=next_layer,
             max_depth=session["max_depth"],
+            session_id=session_id,
             confidence_threshold=session.get("confidence_threshold", 35),
         )
 

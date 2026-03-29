@@ -20,6 +20,26 @@ MATCHER_SKILLS = [
 # Confidence threshold below which the controller auto-stops
 CONFIDENCE_THRESHOLD = 30
 
+KNOWLEDGE_REUSE_SKILL = """## Skill: Knowledge Reuse (search_nodes)
+
+You have access to a knowledge base of nodes from prior analysis sessions —
+effects, opportunities, news summaries, and research results.
+
+WHEN TO USE:
+- Before reasoning from scratch, check if similar analysis already exists
+- When you identify an information gap, search before calling fetch_news
+- When a sector or theme has been analyzed before
+
+HOW TO USE:
+- Start broad (just a query), then narrow with filters if too many results
+- Use node_type filter to find specific kinds of prior work
+- Use min_confidence to surface only high-quality prior analysis
+
+WHAT TO DO WITH RESULTS:
+- If a prior effect is still valid: cite it and build on it
+- If outdated or contradicted: reason fresh, note the contradiction
+- Prior nodes are supporting evidence, not first-class session nodes"""
+
 
 def convergence_score(sentiment: float, discount: float, agreement: float) -> float:
     """Deterministic convergence score: sentiment*0.3 + discount*0.3 + agreement*0.4."""

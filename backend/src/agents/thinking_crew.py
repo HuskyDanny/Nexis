@@ -17,6 +17,7 @@ from src.agents.skills.base import build_system_prompt_with_skills
 from src.agents.tools.fetch_news import FetchNewsTool
 from src.agents.thinking_helpers import (
     CONFIDENCE_THRESHOLD,
+    KNOWLEDGE_REUSE_SKILL,
     MATCHER_SKILLS,
     THINKER_SKILLS,
     convergence_score,
@@ -91,6 +92,7 @@ def run_thinker(
     chain_summary: str,
     news_pool: list[dict],
     layer: int,
+    session_id: str = "",
 ) -> tuple[list[dict], list[dict], list[dict], list[dict], int]:
     """Trace causal effects one layer deeper.
 
@@ -101,13 +103,29 @@ def run_thinker(
 
     tokens = 0
     try:
-        system_prompt = build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
+        system_prompt = (
+            build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
+            + "\n\n"
+            + KNOWLEDGE_REUSE_SKILL
+        )
+        # Build tool list — prefer search_nodes (free, fast) alongside fetch_news
+        try:
+            from src.rag.dependencies import get_search
+            from src.agents.tools.search_nodes import SearchNodesTool
+
+            search_svc = get_search()
+            tools = [
+                SearchNodesTool(search_service=search_svc, session_id=session_id),
+                FetchNewsTool(),
+            ]
+        except (RuntimeError, ImportError):
+            tools = [FetchNewsTool()]  # RAG not initialized, fallback
         thinker = Agent(
             role="Financial Effects Analyst",
             goal="Identify causal market effects using your analytical skills",
             backstory=system_prompt,
             llm=get_main_llm(),
-            tools=[FetchNewsTool()],
+            tools=tools,
             verbose=_is_debug(),
         )
 

@@ -11,6 +11,7 @@ No mock fallback. If LLM is down, pipeline returns empty/partial results.
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
@@ -89,6 +90,38 @@ async def _call_with_retry(func, *args, **kwargs):
     raise last_err  # type: ignore[misc]
 
 
+async def _persist_nodes_background(
+    nodes: list[dict], session_id: str, seeds: list[dict]
+) -> None:
+    """Persist nodes to RAG store. Designed to run as a background task."""
+    try:
+        from src.rag.dependencies import get_persistence
+
+        persistence = get_persistence()
+
+        # Derive market/date from seeds with fallbacks
+        market = ""
+        date = datetime.now().strftime("%Y-%m-%d")
+        if seeds:
+            market = seeds[0].get(
+                "market", seeds[0].get("metadata", {}).get("market", "")
+            )
+            seed_date = seeds[0].get("date") or seeds[0].get(
+                "metadata", {}
+            ).get("date")
+            if seed_date:
+                date = seed_date
+
+        await persistence.persist_batch(
+            nodes,
+            session_id=session_id,
+            market=market,
+            date=date,
+        )
+    except Exception as e:
+        log.warning("RAG persistence failed (non-fatal): %s", e)
+
+
 async def run_layer(
     chain_summary: str,
     parent_nodes: list[dict],
@@ -96,6 +129,7 @@ async def run_layer(
     value_pool: list[dict],
     layer: int,
     max_depth: int,
+    session_id: str,
     confidence_threshold: float = 35,
 ) -> LayerResult:
     """Run one layer of the pipeline: Thinker -> Matcher -> Controller.
@@ -114,6 +148,7 @@ async def run_layer(
                 chain_summary=chain_summary,
                 news_pool=news_pool,
                 layer=layer,
+                session_id=session_id,
             )
         )
     except Exception as e:
@@ -414,6 +449,7 @@ async def run_pipeline(
     """
     chain_summary = ""
     all_layer_nodes: list[list[dict]] = [seeds]  # layer 0 = seeds
+    bg_tasks: list[asyncio.Task] = []
 
     for layer in range(1, max_depth + 1):
         # Parent nodes: all selected nodes from prior layers
@@ -428,9 +464,20 @@ async def run_pipeline(
             value_pool=value_pool,
             layer=layer,
             max_depth=max_depth,
+            session_id=session_id,
         )
 
         await on_layer_complete(layer, result)
+
+        # Persist nodes to RAG store in background (best-effort, non-blocking)
+        all_new_nodes = (
+            result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
+        )
+        if all_new_nodes:
+            task = asyncio.create_task(
+                _persist_nodes_background(all_new_nodes, session_id, seeds)
+            )
+            bg_tasks.append(task)
 
         # Accumulate this layer's nodes for future parent collection
         this_layer_nodes = (
@@ -449,6 +496,10 @@ async def run_pipeline(
                 result.controller_decision.get("reasoning", "unknown"),
             )
             break
+
+    # Wait for any in-flight RAG persistence tasks (best-effort)
+    if bg_tasks:
+        await asyncio.gather(*bg_tasks, return_exceptions=True)
 
     log.info(
         "Pipeline complete for session %s (%d layers)",

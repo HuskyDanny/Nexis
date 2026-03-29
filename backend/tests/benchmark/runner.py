@@ -88,6 +88,7 @@ async def run_scenario_live(
             value_pool=scenario["value_pool"],
             layer=layer_num,
             max_depth=max_depth,
+            session_id=scenario.get("id", "benchmark"),
         )
 
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)

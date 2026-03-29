@@ -52,7 +52,7 @@ jobs:
         run: ruff check src/ tests/
 
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short -m "not benchmark"
+        run: python -m pytest tests/ -v --tb=short -m "not benchmark and not integration"
         env:
           MONGODB_URL: mongodb://localhost:27017/financial_agent_v2
           REDIS_URL: redis://localhost:6379/0

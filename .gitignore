@@ -1,2 +1,6 @@
 # Claude Code worktrees
 .claude/worktrees/
+
+# Python virtual environments
+.venv/
+backend/.venv/
