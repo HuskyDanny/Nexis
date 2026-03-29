@@ -81,3 +81,50 @@ class TestConvergenceScore:
         assert convergence_score(0.0, 100.0, 0.0) == 30.0
         # 0*0.3 + 0*0.3 + 100*0.4 = 40.0
         assert convergence_score(0.0, 0.0, 100.0) == 40.0
+
+
+# ---------------------------------------------------------------------------
+# LiteLLM params tests
+# ---------------------------------------------------------------------------
+
+
+class TestLiteLLMParams:
+    def test_returns_dict_with_required_keys(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.agents.llm_config.settings",
+            type("S", (), {"siliconflow_api_key": "test-key"})(),
+        )
+        from src.agents.llm_config import get_litellm_params
+
+        params = get_litellm_params()
+        assert "model" in params
+        assert "api_key" in params
+        assert params["api_key"] == "test-key"
+        assert "api_base" in params
+
+
+# ---------------------------------------------------------------------------
+# Build thinker prompt tests
+# ---------------------------------------------------------------------------
+
+
+class TestBuildThinkerPrompt:
+    def test_returns_string_with_parent_context(self):
+        from src.agents.thinking_crew import build_thinker_prompt
+
+        parents = [
+            {
+                "id": "s1",
+                "content": "Fed pause",
+                "layer": 0,
+                "type": "news",
+                "selected": True,
+            }
+        ]
+        news = [{"id": "n1", "title": "Rate news", "summary": "Summary"}]
+        prompt = build_thinker_prompt(
+            parent_nodes=parents, chain_summary="", news_pool=news, layer=1
+        )
+        assert "Fed pause" in prompt
+        assert "Rate news" in prompt
+        assert "Return ONLY valid JSON" in prompt

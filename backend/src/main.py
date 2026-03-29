@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,8 +14,16 @@ from src.core.config import settings
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
 from src.database.redis import redis_client
+from src.services.session_events import registry
 
 log = get_logger("app")
+
+
+async def _periodic_health_check():
+    """Run SSE session health check every 30 seconds."""
+    while True:
+        await asyncio.sleep(30)
+        await registry.health_check()
 
 
 @asynccontextmanager
@@ -51,8 +60,18 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     except Exception as e:
         log.warning("RAG initialization failed (non-fatal): %s", e)
 
+    # Start periodic SSE health check
+    health_task = asyncio.create_task(_periodic_health_check())
+
     yield
+
     log.info("Shutting down")
+    health_task.cancel()
+    try:
+        await health_task
+    except asyncio.CancelledError:
+        pass
+
     await close_rag_services()
     await redis_client.close()
     await mongodb.close()
