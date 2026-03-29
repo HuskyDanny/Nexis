@@ -4,3 +4,9 @@
 # Python virtual environments
 .venv/
 backend/.venv/
+
+# DeepEval cache
+backend/.deepeval/
+
+# Worktree artifacts
+worktrees/
