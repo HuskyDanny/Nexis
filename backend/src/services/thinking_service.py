@@ -1,8 +1,9 @@
 """Thinking service — pipeline orchestrator.
 
 Orchestrates the three-agent thinking pipeline:
-- run_layer()    — one layer: Thinker -> Matcher -> Controller
-- run_pipeline() — full loop until Controller stops or max_depth
+- run_layer()           — one layer: Thinker -> Matcher -> Controller (batch)
+- run_layer_streaming() — same pipeline but thinker streams via LiteLLM
+- run_pipeline()        — full loop until Controller stops or max_depth
 
 No mock fallback. If LLM is down, pipeline returns empty/partial results.
 """
@@ -11,9 +12,27 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Optional
+from uuid import uuid4
 
-from src.agents.thinking_crew import run_controller, run_matcher, run_thinker
+from src.agents.llm_config import get_litellm_params
+from src.agents.skills.base import build_system_prompt_with_skills
+from src.agents.thinking_crew import (
+    _build_thinker_output,
+    build_thinker_prompt,
+    run_controller,
+    run_matcher,
+    run_thinker,
+)
+from src.agents.thinking_helpers import THINKER_SKILLS, parse_json_response
 from src.core.logger import get_logger
+from src.services.session_events import SSEEvent, SessionRegistry
+from src.services.stream_parser import IncrementalEffectsParser
+
+# Alias for mockability in tests
+try:
+    from litellm import acompletion as litellm_acompletion
+except ImportError:
+    litellm_acompletion = None  # type: ignore
 
 log = get_logger("thinking.service")
 
@@ -103,7 +122,9 @@ async def run_layer(
 
     if not effect_nodes:
         log.info("Thinker produced no effects at layer %d", layer)
-        return _empty_layer_result("Thinker produced no effects", {"thinker": thinker_tokens})
+        return _empty_layer_result(
+            "Thinker produced no effects", {"thinker": thinker_tokens}
+        )
 
     all_edges = list(effect_edges) + list(fetch_edges)
 
@@ -157,6 +178,222 @@ async def run_layer(
         controller_decision=ctrl,
         tokens_used=tokens_used,
     )
+
+
+async def run_layer_streaming(
+    session_id: str,
+    registry: SessionRegistry,
+    chain_summary: str,
+    parent_nodes: list[dict],
+    news_pool: list[dict],
+    value_pool: list[dict],
+    layer: int,
+    max_depth: int,
+    confidence_threshold: float = 35,
+) -> LayerResult:
+    """Run one layer with a streaming thinker (LiteLLM) + batch matcher/controller.
+
+    Pushes SSE events to the session queue as nodes are generated:
+    - node_start, node_text, node_complete  (from thinker stream)
+    - opportunity                            (from matcher batch)
+    - edges                                  (after thinker + matcher)
+    - layer_complete                         (after controller)
+    - error                                  (on failure)
+    """
+    entry = registry.get(session_id)
+    if entry is None:
+        log.warning("run_layer_streaming: session %s not registered", session_id)
+        return _empty_layer_result("Session not registered")
+
+    queue = entry.queue
+
+    def _push(event: str, data) -> None:
+        try:
+            queue.put_nowait(SSEEvent(event=event, data=data, id=uuid4().hex[:8]))
+        except asyncio.QueueFull:
+            log.warning("Session %s queue full, dropping event %s", session_id, event)
+
+    try:
+        # --- Thinker (streaming via LiteLLM) ---
+        if not parent_nodes:
+            _push("layer_complete", {"layer": layer, "reason": "no parent nodes"})
+            return _empty_layer_result("No parent nodes")
+
+        system_prompt = build_system_prompt_with_skills(allowed_skills=THINKER_SKILLS)
+        user_prompt = build_thinker_prompt(
+            parent_nodes=parent_nodes,
+            chain_summary=chain_summary,
+            news_pool=news_pool,
+            layer=layer,
+        )
+
+        if litellm_acompletion is None:
+            raise RuntimeError(
+                "litellm is not installed — streaming thinker requires litellm"
+            )
+
+        litellm_params = get_litellm_params()
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        parser = IncrementalEffectsParser()
+        full_text = ""
+        index_to_id: dict[int, str] = {}
+        parent_ids = [n["id"] for n in parent_nodes]
+
+        response = await litellm_acompletion(
+            messages=messages, stream=True, **litellm_params
+        )
+
+        async for chunk in response:
+            delta = chunk.choices[0].delta
+            token = getattr(delta, "content", None) or ""
+            if not token:
+                continue
+            full_text += token
+            events = parser.feed(token)
+            for ev in events:
+                idx = ev["data"].get("index")
+                if ev["type"] == "node_start":
+                    node_id = uuid4().hex[:12]
+                    index_to_id[idx] = node_id
+                    _push(
+                        "node_start",
+                        {
+                            "id": node_id,
+                            "layer": layer,
+                            "type": "effect",
+                            "parent_ids": parent_ids,
+                        },
+                    )
+                elif ev["type"] == "node_text":
+                    node_id = index_to_id.get(idx, f"unknown-{idx}")
+                    _push(
+                        "node_text",
+                        {
+                            "id": node_id,
+                            "field": ev["data"]["field"],
+                            "delta": ev["data"]["delta"],
+                        },
+                    )
+                elif ev["type"] == "node_complete":
+                    node_id = index_to_id.get(idx, f"unknown-{idx}")
+                    _push(
+                        "node_complete",
+                        {
+                            "id": node_id,
+                            "confidence": ev["data"].get("confidence", 0),
+                            "metadata": {
+                                k: v
+                                for k, v in ev["data"].items()
+                                if k
+                                not in (
+                                    "index",
+                                    "content",
+                                    "reasoning",
+                                    "confidence",
+                                )
+                            },
+                        },
+                    )
+
+        # Parse full response for node/edge construction
+        parsed = parse_json_response(full_text)
+        if not parsed or not isinstance(parsed, dict):
+            log.warning("Thinker stream parse failed at layer %d", layer)
+            _push("layer_complete", {"layer": layer, "reason": "parse failed"})
+            return _empty_layer_result("Thinker stream parse failed")
+
+        effects_raw = parsed.get("effects", [])
+        effect_nodes, fetch_nodes, effect_edges, fetch_edges = _build_thinker_output(
+            effects_raw, parent_nodes, news_pool, layer
+        )
+
+        if not effect_nodes:
+            log.info("Thinker stream produced no effects at layer %d", layer)
+            _push("layer_complete", {"layer": layer, "reason": "no effects"})
+            return _empty_layer_result("Thinker produced no effects")
+
+        all_edges = list(effect_edges) + list(fetch_edges)
+
+        # Push edges from thinker
+        _push("edges", {"edges": all_edges, "source": "thinker"})
+
+        # --- Matcher (batch) ---
+        opportunity_nodes: list[dict] = []
+        matcher_tokens = 0
+        try:
+            opportunity_nodes, match_edges, matcher_tokens = await _call_with_retry(
+                run_matcher,
+                effects=effect_nodes,
+                value_pool=value_pool,
+            )
+            all_edges.extend(match_edges)
+            for opp in opportunity_nodes:
+                _push("opportunity", opp)
+            if match_edges:
+                _push("edges", {"edges": match_edges, "source": "matcher"})
+        except Exception as e:
+            log.warning(
+                "Matcher failed at layer %d (streaming), continuing: %s", layer, e
+            )
+
+        # --- Controller (batch) ---
+        controller_tokens = 0
+        try:
+            ctrl, controller_tokens = await _call_with_retry(
+                run_controller,
+                chain_summary=chain_summary,
+                effects=effect_nodes,
+                matches=opportunity_nodes,
+                layer=layer,
+                max_depth=max_depth,
+                confidence_threshold=confidence_threshold,
+            )
+        except Exception as e:
+            log.warning(
+                "Controller failed at layer %d (streaming), using default: %s", layer, e
+            )
+            should_continue = layer < DEFAULT_STOP_LAYER
+            ctrl = {
+                "continue": should_continue,
+                "reasoning": f"Controller failed, default: {'continue' if should_continue else 'stop'}",
+                "summary": chain_summary,
+            }
+
+        _push(
+            "layer_complete",
+            {
+                "layer": layer,
+                "effect_count": len(effect_nodes),
+                "opportunity_count": len(opportunity_nodes),
+                "controller": ctrl,
+            },
+        )
+
+        tokens_used = {
+            "thinker": 0,  # streaming path doesn't track tokens yet
+            "matcher": matcher_tokens,
+            "controller": controller_tokens,
+        }
+
+        return LayerResult(
+            effect_nodes=effect_nodes,
+            fetch_nodes=fetch_nodes,
+            opportunity_nodes=opportunity_nodes,
+            all_edges=all_edges,
+            controller_decision=ctrl,
+            tokens_used=tokens_used,
+        )
+
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        log.error("run_layer_streaming failed at layer %d: %s", layer, e)
+        _push("error", {"layer": layer, "error": str(e)})
+        return _empty_layer_result(f"Streaming layer failed: {e}")
 
 
 async def run_pipeline(

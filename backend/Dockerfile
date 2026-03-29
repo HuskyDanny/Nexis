@@ -17,8 +17,8 @@ RUN uv venv /opt/venv \
 # ── Runtime stage ─────────────────────────────────────────────
 FROM python:3.12-slim
 
-# Security: non-root user
-RUN groupadd -g 1001 app && useradd -u 1001 -g app -s /bin/false app
+# Security: non-root user with writable home (CrewAI needs it for storage paths)
+RUN groupadd -g 1001 app && useradd -u 1001 -g app -m -s /bin/false app
 
 WORKDIR /app
 

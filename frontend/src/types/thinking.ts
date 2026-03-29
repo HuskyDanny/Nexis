@@ -36,10 +36,42 @@ export interface ThinkingSession {
   error: string | null;
 }
 
-// SSE event types
-export type ThinkingEvent =
-  | { type: "layer_started"; layer: number }
-  | { type: "node_created"; node: ThinkingNode }
-  | { type: "layer_complete"; layer: number; node_count: number }
-  | { type: "thinking_error"; layer: number; error: string }
-  | { type: "match_complete"; opportunities: ThinkingNode[] };
+// SSE event types — matches backend event protocol
+export interface SSENodeStart {
+  id: string;
+  layer: number;
+  type: ThinkingNodeType;
+  parent_ids: string[];
+}
+
+export interface SSENodeText {
+  id: string;
+  field: "content" | "reasoning";
+  delta: string;
+}
+
+export interface SSENodeComplete {
+  id: string;
+  confidence: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface SSELayerComplete {
+  layer: number;
+  controller: { continue: boolean; reasoning: string; summary: string };
+}
+
+export interface SSESessionComplete {
+  status: string;
+}
+
+export interface SSEError {
+  error: string;
+  message?: string;
+  layer?: number;
+}
+
+export interface SSEEdgesPayload {
+  edges: ThinkingEdge[];
+  source?: string;
+}

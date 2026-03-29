@@ -42,3 +42,13 @@ def get_small_llm() -> LLM:
         base_url=SILICONFLOW_BASE_URL,
         temperature=0.1,
     )
+
+
+def get_litellm_params() -> dict:
+    """Return params dict for direct litellm.acompletion() calls."""
+    return {
+        "model": MAIN_MODEL,
+        "api_key": _get_api_key(),
+        "api_base": SILICONFLOW_BASE_URL,
+        "temperature": 0.3,
+    }

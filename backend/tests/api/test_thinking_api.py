@@ -257,13 +257,13 @@ async def test_auto_think_timeout_sets_status():
             return mock_pools_col
         return mock_col
 
-    # Create a pipeline that times out
-    async def slow_pipeline(*args, **kwargs):
+    # Create a streaming layer that hangs (simulates timeout)
+    async def slow_layer(*args, **kwargs):
         await asyncio.sleep(999)
 
     with (
         patch("src.api.thinking_auto.mongodb") as mock_db,
-        patch("src.api.thinking_auto.run_pipeline", side_effect=slow_pipeline),
+        patch("src.api.thinking_auto.run_layer_streaming", side_effect=slow_layer),
         patch(
             "src.api.thinking_auto.fetch_real_news",
             new_callable=AsyncMock,
@@ -309,13 +309,17 @@ async def test_auto_think_session_includes_new_fields():
             return mock_pools_col
         return mock_col
 
-    # Pipeline that completes immediately
-    async def fast_pipeline(*args, **kwargs):
-        pass
+    # Streaming layer that returns empty result (stops immediately)
+    from src.services.thinking_service import LayerResult
+
+    async def fast_layer(*args, **kwargs):
+        return LayerResult(
+            controller_decision={"continue": False, "reasoning": "test", "summary": ""}
+        )
 
     with (
         patch("src.api.thinking_auto.mongodb") as mock_db,
-        patch("src.api.thinking_auto.run_pipeline", side_effect=fast_pipeline),
+        patch("src.api.thinking_auto.run_layer_streaming", side_effect=fast_layer),
         patch(
             "src.api.thinking_auto.fetch_real_news",
             new_callable=AsyncMock,

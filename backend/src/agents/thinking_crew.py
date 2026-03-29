@@ -39,7 +39,51 @@ def _is_debug() -> bool:
 
 
 _parse_json_response = parse_json_response  # noqa: F841 — re-export
-_prepare_parent_nodes = prepare_parent_nodes
+
+
+def build_thinker_prompt(
+    parent_nodes: list[dict],
+    chain_summary: str,
+    news_pool: list[dict],
+    layer: int,
+) -> str:
+    """Build the thinker agent prompt. Shared between CrewAI and direct LiteLLM paths."""
+    parents_json = json.dumps(
+        prepare_parent_nodes(parent_nodes, current_layer=layer),
+        ensure_ascii=False,
+    )
+    pool_json = json.dumps(
+        [
+            {
+                "id": n.get("id", ""),
+                "title": n.get("title", n.get("summary", "")),
+                "summary": n.get("summary", ""),
+            }
+            for n in news_pool[:20]
+        ],
+        ensure_ascii=False,
+    )
+    chain_ctx = f"Chain summary so far:\n{chain_summary}\n\n" if chain_summary else ""
+    return (
+        f"{chain_ctx}"
+        f"Analyze these financial events and identify their next-order "
+        f"market effects.\n\n"
+        f"Parent nodes (layers 0-{layer - 1}):\n{parents_json}\n\n"
+        f"Available news pool:\n{pool_json}\n\n"
+        f"For each effect:\n"
+        f"1. Content — what happens\n"
+        f"2. Reasoning — the causal chain from parent(s)\n"
+        f"3. Confidence (0-100) — naturally lower for deeper chains\n"
+        f"4. Parent IDs — which parent(s) cause it\n"
+        f"5. Sector — affected sector\n"
+        f"6. Fetched news IDs — any news from pool you reference\n"
+        f"7. Information gaps — what you wish you knew\n\n"
+        f"Return JSON:\n"
+        f'{{"effects": [{{"content": str, "reasoning": str, '
+        f'"confidence": int, "parent_ids": [str], "sector": str, '
+        f'"fetched_news_ids": [str], "information_gaps": [str]}}]}}\n\n'
+        f"Return ONLY valid JSON."
+    )
 
 
 def run_thinker(
@@ -67,43 +111,11 @@ def run_thinker(
             verbose=_is_debug(),
         )
 
-        parents_json = json.dumps(
-            _prepare_parent_nodes(parent_nodes, current_layer=layer),
-            ensure_ascii=False,
-        )
-        pool_json = json.dumps(
-            [
-                {
-                    "id": n.get("id", ""),
-                    "title": n.get("title", n.get("summary", "")),
-                    "summary": n.get("summary", ""),
-                }
-                for n in news_pool[:20]
-            ],
-            ensure_ascii=False,
-        )
-        chain_ctx = (
-            f"Chain summary so far:\n{chain_summary}\n\n" if chain_summary else ""
-        )
-        description = (
-            f"{chain_ctx}"
-            f"Analyze these financial events and identify their next-order "
-            f"market effects.\n\n"
-            f"Parent nodes (layers 0-{layer - 1}):\n{parents_json}\n\n"
-            f"Available news pool:\n{pool_json}\n\n"
-            f"For each effect:\n"
-            f"1. Content — what happens\n"
-            f"2. Reasoning — the causal chain from parent(s)\n"
-            f"3. Confidence (0-100) — naturally lower for deeper chains\n"
-            f"4. Parent IDs — which parent(s) cause it\n"
-            f"5. Sector — affected sector\n"
-            f"6. Fetched news IDs — any news from pool you reference\n"
-            f"7. Information gaps — what you wish you knew\n\n"
-            f"Return JSON:\n"
-            f'{{"effects": [{{"content": str, "reasoning": str, '
-            f'"confidence": int, "parent_ids": [str], "sector": str, '
-            f'"fetched_news_ids": [str], "information_gaps": [str]}}]}}\n\n'
-            f"Return ONLY valid JSON."
+        description = build_thinker_prompt(
+            parent_nodes=parent_nodes,
+            chain_summary=chain_summary,
+            news_pool=news_pool,
+            layer=layer,
         )
         prompt_chars = len(description)
         if _is_debug():
@@ -120,9 +132,7 @@ def run_thinker(
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
 
-        tokens = (
-            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
-        )
+        tokens = getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
 
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
@@ -144,7 +154,13 @@ def run_thinker(
         n_fetch = len(fetch_nodes)
         log.info(
             "THINKER L%d | skills=%d | %.1fs | parsed=%d effects, %d fetch | prompt=%d chars | tokens=%d",
-            layer, len(THINKER_SKILLS), elapsed, n_effects, n_fetch, prompt_chars, tokens,
+            layer,
+            len(THINKER_SKILLS),
+            elapsed,
+            n_effects,
+            n_fetch,
+            prompt_chars,
+            tokens,
         )
         return effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens
 
@@ -309,9 +325,7 @@ def run_matcher(
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
 
-        tokens = (
-            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
-        )
+        tokens = getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
 
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
@@ -333,7 +347,12 @@ def run_matcher(
         n_built = len(opp_nodes)
         log.info(
             "MATCHER | skills=%d | %.1fs | parsed=%d, built=%d opportunities | prompt=%d chars | tokens=%d",
-            len(MATCHER_SKILLS), elapsed, n_parsed, n_built, prompt_chars, tokens,
+            len(MATCHER_SKILLS),
+            elapsed,
+            n_parsed,
+            n_built,
+            prompt_chars,
+            tokens,
         )
         return opp_nodes, edges, tokens
 
@@ -494,9 +513,7 @@ def run_controller(
         result = crew.kickoff()
         elapsed = time.perf_counter() - t0
 
-        tokens = (
-            getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
-        )
+        tokens = getattr(getattr(result, "token_usage", None), "total_tokens", 0) or 0
 
         # Prefer structured output_json; fall back to raw parsing
         parsed = getattr(result, "json_dict", None)
@@ -516,14 +533,26 @@ def run_controller(
             }, tokens
 
         ctrl_result = {
-            "continue": bool(parsed.get("continue", parsed.get("continue_decision", False))),
+            "continue": bool(
+                parsed.get("continue", parsed.get("continue_decision", False))
+            ),
             "reasoning": parsed.get("reasoning", ""),
             "summary": parsed.get("summary", chain_summary),
         }
-        _s = str(ctrl_result["summary"]).replace("\n", " ").replace("\r", " ").replace('"', '\\"')[:80]
+        _s = (
+            str(ctrl_result["summary"])
+            .replace("\n", " ")
+            .replace("\r", " ")
+            .replace('"', '\\"')[:80]
+        )
         log.info(
             'CONTROLLER L%d | %.1fs | continue=%s | prompt=%d chars | tokens=%d | summary="%s"',
-            layer, elapsed, ctrl_result["continue"], prompt_chars, tokens, _s,
+            layer,
+            elapsed,
+            ctrl_result["continue"],
+            prompt_chars,
+            tokens,
+            _s,
         )
         return ctrl_result, tokens
 

@@ -57,6 +57,27 @@ export function nodeStyle(
   };
 }
 
+/**
+ * Calculate deterministic position on a concentric ring.
+ * Used during SSE streaming — avoids d3-force re-simulation.
+ */
+export function concentricPosition(
+  layer: number,
+  index: number,
+  totalInLayer: number,
+  layerRadius: number = 180,
+): { x: number; y: number } {
+  if (layer === 0) {
+    const angle = (index / Math.max(totalInLayer, 1)) * 2 * Math.PI;
+    const r = totalInLayer > 1 ? 60 : 0;
+    return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
+  }
+  const r = layer * layerRadius;
+  const angle =
+    (index / Math.max(totalInLayer, 1)) * 2 * Math.PI + (layer * Math.PI) / 6;
+  return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
+}
+
 export function buildThinkingGraph(
   nodes: ThinkingNode[],
   edges: ThinkingEdge[],
