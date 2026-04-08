@@ -3,7 +3,6 @@
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
@@ -80,17 +79,6 @@ async def _call_with_retry(func, *args, **kwargs):
                     "Agent call failed (attempt %d), retrying: %s", attempt + 1, e
                 )
     raise last_err  # type: ignore[misc]
-
-
-async def _persist_nodes_background(
-    nodes: list[dict], session_id: str, seeds: list[dict]
-) -> None:
-    """DEPRECATED: RAG persistence replaced by graph writer.
-
-    Graph ingestion is handled by try_ingest_thinking_layer() in the pipeline.
-    This function is kept as a no-op for backwards compatibility.
-    """
-    pass
 
 
 async def run_layer(
@@ -413,7 +401,6 @@ async def run_pipeline(
     """Run the full pipeline loop: iterate layers until controller stops or max_depth."""
     chain_summary = ""
     all_layer_nodes: list[list[dict]] = [seeds]  # layer 0 = seeds
-    bg_tasks: list[asyncio.Task] = []
 
     for layer in range(1, max_depth + 1):
         # Parent nodes: all selected nodes from prior layers
@@ -438,14 +425,8 @@ async def run_pipeline(
             result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
         )
 
-        # Persist nodes to RAG store in background (best-effort, non-blocking)
+        # Fire-and-forget graph write (graceful degradation)
         if all_new_nodes:
-            task = asyncio.create_task(
-                _persist_nodes_background(all_new_nodes, session_id, seeds)
-            )
-            bg_tasks.append(task)
-
-            # Fire-and-forget graph write (graceful degradation)
             from src.graph.writer import try_ingest_thinking_layer
 
             try_ingest_thinking_layer(session_id, layer, all_new_nodes)
@@ -464,10 +445,6 @@ async def run_pipeline(
                 result.controller_decision.get("reasoning", "unknown"),
             )
             break
-
-    # Wait for any in-flight RAG persistence tasks (best-effort)
-    if bg_tasks:
-        await asyncio.gather(*bg_tasks, return_exceptions=True)
 
     log.info(
         "Pipeline complete for session %s (%d layers)",
