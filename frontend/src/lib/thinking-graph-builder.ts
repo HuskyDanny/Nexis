@@ -144,11 +144,14 @@ export function buildThinkingGraph(
       n.type === "opportunity" ? maxLayer + 1 : (n.layer ?? 0),
     ]),
   );
+  // Scale layout params with node count — more nodes need more space
+  const n = nodes.length;
+  const scale = Math.max(1, n / 15); // 1x at 15 nodes, 2x at 30, etc.
   const layoutNodes = layoutGraph(rfNodes, rfEdges, {
-    chargeStrength: -800,
-    linkDistance: 200,
-    collideRadius: 130,
-    iterations: 200,
+    chargeStrength: -800 * scale,
+    linkDistance: 200 * Math.sqrt(scale),
+    collideRadius: 130 * Math.sqrt(scale),
+    iterations: 200 + n * 2,
     layerMap,
     layerRadius: 250,
     fixedPositions,

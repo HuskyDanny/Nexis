@@ -602,15 +602,20 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
 
       <OpportunitiesBanner session={session} />
 
-      {/* Agent face during thinking */}
-      {isThinking && (
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none"
-          style={{ opacity: 0.4 }}
-        >
-          <AgentFace size={80} />
-        </div>
-      )}
+      {/* Agent face: only while thinking AND before any effect nodes arrive */}
+      {isThinking &&
+        !nodes.some(
+          (n) =>
+            (n.data as Record<string, unknown>).layer !== undefined &&
+            ((n.data as Record<string, unknown>).layer as number) > 0,
+        ) && (
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none"
+            style={{ opacity: 0.4 }}
+          >
+            <AgentFace size={80} />
+          </div>
+        )}
 
       {/* React Flow graph */}
       <ReactFlow
