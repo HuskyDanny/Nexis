@@ -47,14 +47,16 @@ function StreamingNodeComponent({ data }: NodeProps) {
             style={{ opacity: 0.6 }}
           />
         )}
-        {d.confidence != null && !d.streaming && (
-          <div
-            className="mt-1 text-[10px]"
-            style={{ color: isOpp ? "#86efac" : "#9ca3af" }}
-          >
-            {d.confidence}% confidence
-          </div>
-        )}
+        {typeof d.confidence === "number" &&
+          !Number.isNaN(d.confidence) &&
+          !d.streaming && (
+            <div
+              className="mt-1 text-[10px]"
+              style={{ color: isOpp ? "#86efac" : "#9ca3af" }}
+            >
+              {d.confidence}% confidence
+            </div>
+          )}
       </div>
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>

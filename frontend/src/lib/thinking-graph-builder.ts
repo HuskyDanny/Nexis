@@ -86,6 +86,7 @@ export function buildThinkingGraph(
   // Build React Flow nodes
   const rfNodes: RFNode[] = nodes.map((n) => ({
     id: n.id,
+    type: "streaming",
     position: { x: 0, y: 0 },
     data: {
       label: n.content,
@@ -93,6 +94,10 @@ export function buildThinkingGraph(
       layer: n.layer,
       selected: n.selected,
       reasoning: n.reasoning,
+      confidence:
+        (n.metadata?.confidence as number) ??
+        (n as unknown as Record<string, unknown>).confidence ??
+        undefined,
     },
     style: nodeStyle(n.type, n.selected, n.layer),
   }));
@@ -131,14 +136,21 @@ export function buildThinkingGraph(
   });
 
   // Apply concentric ring layout — strong repulsion to prevent overlap
-  const layerMap = new Map(nodes.map((n) => [n.id, n.layer]));
+  // Opportunity nodes go on outer ring (max_layer + 1) so they don't crowd the center
+  const maxLayer = Math.max(...nodes.map((n) => n.layer ?? 0), 0);
+  const layerMap = new Map(
+    nodes.map((n) => [
+      n.id,
+      n.type === "opportunity" ? maxLayer + 1 : (n.layer ?? 0),
+    ]),
+  );
   const layoutNodes = layoutGraph(rfNodes, rfEdges, {
-    chargeStrength: -600,
-    linkDistance: 150,
-    collideRadius: 100,
-    iterations: 150,
+    chargeStrength: -800,
+    linkDistance: 200,
+    collideRadius: 130,
+    iterations: 200,
     layerMap,
-    layerRadius: 180,
+    layerRadius: 250,
     fixedPositions,
   });
 
