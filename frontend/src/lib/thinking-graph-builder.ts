@@ -65,10 +65,11 @@ export function concentricPosition(
   layer: number,
   index: number,
   totalInLayer: number,
-  layerRadius: number = 180,
+  layerRadius: number = 250,
 ): { x: number; y: number } {
   if (layer === 0) {
-    const r = totalInLayer > 1 ? 60 : 0;
+    // Keep news at center — small cluster, d3 radial also targets radius 0
+    const r = totalInLayer > 1 ? 80 : 0;
     const angle = (index / Math.max(totalInLayer, 1)) * 2 * Math.PI;
     return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
   }
