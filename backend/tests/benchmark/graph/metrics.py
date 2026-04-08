@@ -1,4 +1,4 @@
-"""Search quality metrics for RAG benchmarking."""
+"""Search quality metrics for graph search benchmarking."""
 
 import math
 

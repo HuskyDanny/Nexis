@@ -1,4 +1,8 @@
-"""BM25 sparse encoding via fastembed."""
+"""BM25 sparse encoding via fastembed.
+
+DEPRECATED: Graph services handle sparse encoding internally via Graphiti.
+Kept for backwards compatibility with existing tests. Do not use in new code.
+"""
 
 from __future__ import annotations
 

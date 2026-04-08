@@ -1,4 +1,8 @@
-"""Centralized RAG configuration. All tunable parameters in one place."""
+"""Centralized RAG configuration. All tunable parameters in one place.
+
+DEPRECATED: Graph configuration is in src/graph/config.py.
+This module is kept for backwards compatibility with existing tests.
+"""
 
 from pydantic_settings import BaseSettings
 

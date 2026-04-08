@@ -1,12 +1,4 @@
-"""Thinking service — pipeline orchestrator.
-
-Orchestrates the three-agent thinking pipeline:
-- run_layer()           — one layer: Thinker -> Matcher -> Controller (batch)
-- run_layer_streaming() — same pipeline but thinker streams via LiteLLM
-- run_pipeline()        — full loop until Controller stops or max_depth
-
-No mock fallback. If LLM is down, pipeline returns empty/partial results.
-"""
+"""Thinking service — three-agent pipeline orchestrator (Thinker->Matcher->Controller)."""
 
 import asyncio
 from collections.abc import Callable
@@ -93,33 +85,12 @@ async def _call_with_retry(func, *args, **kwargs):
 async def _persist_nodes_background(
     nodes: list[dict], session_id: str, seeds: list[dict]
 ) -> None:
-    """Persist nodes to RAG store. Designed to run as a background task."""
-    try:
-        from src.rag.dependencies import get_persistence
+    """DEPRECATED: RAG persistence replaced by graph writer.
 
-        persistence = get_persistence()
-
-        # Derive market/date from seeds with fallbacks
-        market = ""
-        date = datetime.now().strftime("%Y-%m-%d")
-        if seeds:
-            market = seeds[0].get(
-                "market", seeds[0].get("metadata", {}).get("market", "")
-            )
-            seed_date = seeds[0].get("date") or seeds[0].get(
-                "metadata", {}
-            ).get("date")
-            if seed_date:
-                date = seed_date
-
-        await persistence.persist_batch(
-            nodes,
-            session_id=session_id,
-            market=market,
-            date=date,
-        )
-    except Exception as e:
-        log.warning("RAG persistence failed (non-fatal): %s", e)
+    Graph ingestion is handled by try_ingest_thinking_layer() in the pipeline.
+    This function is kept as a no-op for backwards compatibility.
+    """
+    pass
 
 
 async def run_layer(
@@ -439,14 +410,7 @@ async def run_pipeline(
     max_depth: int,
     on_layer_complete: Callable,
 ) -> None:
-    """Run the full thinking pipeline loop.
-
-    Iterates layers starting from 1. Each layer:
-    1. Collects all selected nodes from prior layers as parent_nodes
-    2. Calls run_layer()
-    3. Persists via on_layer_complete callback
-    4. Stops on: controller stop, max_depth reached, or empty effects
-    """
+    """Run the full pipeline loop: iterate layers until controller stops or max_depth."""
     chain_summary = ""
     all_layer_nodes: list[list[dict]] = [seeds]  # layer 0 = seeds
     bg_tasks: list[asyncio.Task] = []
@@ -469,21 +433,25 @@ async def run_pipeline(
 
         await on_layer_complete(layer, result)
 
-        # Persist nodes to RAG store in background (best-effort, non-blocking)
+        # Collect all new nodes for persistence + accumulation
         all_new_nodes = (
             result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
         )
+
+        # Persist nodes to RAG store in background (best-effort, non-blocking)
         if all_new_nodes:
             task = asyncio.create_task(
                 _persist_nodes_background(all_new_nodes, session_id, seeds)
             )
             bg_tasks.append(task)
 
+            # Fire-and-forget graph write (graceful degradation)
+            from src.graph.writer import try_ingest_thinking_layer
+
+            try_ingest_thinking_layer(session_id, layer, all_new_nodes)
+
         # Accumulate this layer's nodes for future parent collection
-        this_layer_nodes = (
-            result.effect_nodes + result.fetch_nodes + result.opportunity_nodes
-        )
-        all_layer_nodes.append(this_layer_nodes)
+        all_layer_nodes.append(all_new_nodes)
 
         # Update chain summary from controller
         chain_summary = result.controller_decision.get("summary", chain_summary)

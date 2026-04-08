@@ -1,4 +1,8 @@
-"""Fake implementations for testing. No network, no Docker, deterministic."""
+"""Fake implementations for testing. No network, no Docker, deterministic.
+
+DEPRECATED: Test fakes for the Qdrant-based RAG pipeline. New tests should
+use FakeGraphStore from src.graph.fakes instead.
+"""
 
 from __future__ import annotations
 

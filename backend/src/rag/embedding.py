@@ -1,4 +1,8 @@
-"""SiliconFlow embedding provider."""
+"""SiliconFlow embedding provider.
+
+DEPRECATED: Graph services handle embeddings internally via Graphiti.
+Kept for backwards compatibility with existing tests. Do not use in new code.
+"""
 
 from __future__ import annotations
 

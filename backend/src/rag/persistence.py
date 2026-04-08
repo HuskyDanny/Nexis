@@ -1,4 +1,10 @@
-"""Dual-write persistence: MongoDB (source of truth) + Qdrant (search index)."""
+"""Dual-write persistence: MongoDB (source of truth) + Qdrant (search index).
+
+DEPRECATED: Persistence is now handled by:
+  - MongoDB: via ThinkingSessionRepo (session data)
+  - Neo4j: via GraphWriter.ingest_thinking_layer() (graph knowledge)
+This module is kept for backwards compatibility with existing tests.
+"""
 
 from __future__ import annotations
 

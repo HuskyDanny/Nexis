@@ -1,4 +1,9 @@
-"""Agent tool for searching the node knowledge base via RAG."""
+"""Agent tool for searching the node knowledge base via RAG.
+
+DEPRECATED: Replaced by graph tools (graph_search, explore_entity, find_paths,
+get_relationships). Kept for backwards compatibility with existing tests.
+See src/agents/tools/graph_search.py for the active replacement.
+"""
 
 from __future__ import annotations
 

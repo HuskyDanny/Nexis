@@ -1,4 +1,9 @@
-"""Node search with hybrid retrieval and query-time decay re-ranking."""
+"""Node search with hybrid retrieval and query-time decay re-ranking.
+
+DEPRECATED: Search is now handled by graph tools (GraphSearchTool, etc.)
+backed by Graphiti's built-in hybrid search. This module is kept for
+backwards compatibility with existing tests.
+"""
 
 from __future__ import annotations
 

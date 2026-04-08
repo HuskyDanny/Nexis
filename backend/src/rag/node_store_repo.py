@@ -1,4 +1,8 @@
-"""MongoDB repository for the node_store collection."""
+"""MongoDB repository for the node_store collection.
+
+DEPRECATED: Node storage is handled by Neo4j via Graphiti graph store.
+Kept for backwards compatibility with existing tests. Do not use in new code.
+"""
 
 from __future__ import annotations
 

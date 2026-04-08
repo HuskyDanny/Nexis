@@ -15,6 +15,10 @@ from crewai import Agent, Crew, Task
 from src.agents.llm_config import get_main_llm
 from src.agents.skills.base import build_system_prompt_with_skills
 from src.agents.tools.fetch_news import FetchNewsTool
+from src.agents.tools.graph_search import GraphSearchTool
+from src.agents.tools.explore_entity import ExploreEntityTool
+from src.agents.tools.find_paths import FindPathsTool
+from src.agents.tools.get_relationships import GetRelationshipsTool
 from src.agents.thinking_helpers import (
     CONFIDENCE_THRESHOLD,
     KNOWLEDGE_REUSE_SKILL,
@@ -108,18 +112,20 @@ def run_thinker(
             + "\n\n"
             + KNOWLEDGE_REUSE_SKILL
         )
-        # Build tool list — prefer search_nodes (free, fast) alongside fetch_news
+        # Build tool list — graph tools (free, fast) alongside fetch_news
         try:
-            from src.rag.dependencies import get_search
-            from src.agents.tools.search_nodes import SearchNodesTool
+            from src.graph.dependencies import get_graph_store
 
-            search_svc = get_search()
+            graph_store = get_graph_store()
             tools = [
-                SearchNodesTool(search_service=search_svc, session_id=session_id),
+                GraphSearchTool(graph_store=graph_store),
+                ExploreEntityTool(graph_store=graph_store),
+                FindPathsTool(graph_store=graph_store),
+                GetRelationshipsTool(graph_store=graph_store),
                 FetchNewsTool(),
             ]
         except (RuntimeError, ImportError):
-            tools = [FetchNewsTool()]  # RAG not initialized, fallback
+            tools = [FetchNewsTool()]  # Graph not initialized, fallback
         thinker = Agent(
             role="Financial Effects Analyst",
             goal="Identify causal market effects using your analytical skills",

@@ -51,14 +51,14 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     except Exception as e:
         log.warning("Redis connection failed (non-fatal): %s", e)
 
-    # Connect Qdrant + initialize RAG services
-    from src.rag.dependencies import init_rag_services, close_rag_services
+    # Initialize graph services (Neo4j + Graphiti)
+    from src.graph.dependencies import init_graph_services, close_graph_services
 
     try:
-        await init_rag_services()
-        log.info("RAG services initialized")
+        await init_graph_services()
+        log.info("Graph services initialized")
     except Exception as e:
-        log.warning("RAG initialization failed (non-fatal): %s", e)
+        log.warning("Graph initialization failed (non-fatal): %s", e)
 
     # Start periodic SSE health check
     health_task = asyncio.create_task(_periodic_health_check())
@@ -72,7 +72,10 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     except asyncio.CancelledError:
         pass
 
-    await close_rag_services()
+    try:
+        await close_graph_services()
+    except Exception:
+        pass
     await redis_client.close()
     await mongodb.close()
 

@@ -1,4 +1,8 @@
-"""Qdrant vector store implementation."""
+"""Qdrant vector store implementation.
+
+DEPRECATED: Replaced by Graphiti graph store (src/graph/client.py).
+Kept for backwards compatibility with existing tests. Do not use in new code.
+"""
 
 from __future__ import annotations
 
