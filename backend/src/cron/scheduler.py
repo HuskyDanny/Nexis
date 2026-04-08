@@ -115,10 +115,27 @@ async def run_news_pipeline() -> None:
             result.rescored,
         )
 
+        # Sync active articles to pools cache so /pools/live gets a cache HIT
+        active_articles = await repo.get_active()
+        if active_articles:
+            pools_col = mongodb.get_collection("pools")
+            today = start.strftime("%Y-%m-%d")
+            for market in [None, "US", "CN"]:
+                await pools_col.update_one(
+                    {"type": "news", "date": today, "market": market or "US"},
+                    {
+                        "$set": {
+                            "items": active_articles,
+                            "cached_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                    upsert=True,
+                )
+            log.info("Synced %d news articles to pools cache", len(active_articles))
+
         # Fire-and-forget graph write for active news entities (graceful degradation)
         from src.graph.writer import try_ingest_news_batch
 
-        active_articles = await repo.get_active()
         try_ingest_news_batch(active_articles)
     except Exception as e:
         duration = (datetime.now(timezone.utc) - start).total_seconds()
@@ -160,6 +177,27 @@ async def run_value_pipeline() -> None:
                     "created_at": start.isoformat(),
                 }
             )
+            # Sync active values to pools cache
+            active_values = await repo.get_active(market=market)
+            if active_values:
+                pools_col = mongodb.get_collection("pools")
+                today = start.strftime("%Y-%m-%d")
+                await pools_col.update_one(
+                    {"type": "value", "date": today, "market": market},
+                    {
+                        "$set": {
+                            "items": active_values,
+                            "cached_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                    upsert=True,
+                )
+                log.info(
+                    "Synced %d value entities to pools cache for market=%s",
+                    len(active_values),
+                    market,
+                )
+
             log.info(
                 "Value pipeline market=%s done in %.1fs — %d inserted, %d merged, %d rescored",
                 market,
