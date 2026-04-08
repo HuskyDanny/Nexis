@@ -65,11 +65,10 @@ export function concentricPosition(
   layer: number,
   index: number,
   totalInLayer: number,
-  layerRadius: number = 350,
+  layerRadius: number = 180,
 ): { x: number; y: number } {
   if (layer === 0) {
-    // Scale layer-0 radius with node count so seeds never overlap
-    const r = totalInLayer > 1 ? Math.max(200, totalInLayer * 50) : 0;
+    const r = totalInLayer > 1 ? 60 : 0;
     const angle = (index / Math.max(totalInLayer, 1)) * 2 * Math.PI;
     return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
   }
@@ -147,14 +146,14 @@ export function buildThinkingGraph(
   );
   // Scale layout params with node count — more nodes need more space
   const n = nodes.length;
-  const scale = Math.max(1, n / 10); // 1x at 10 nodes, 2x at 20, etc.
+  const scale = Math.max(1, n / 15); // 1x at 15 nodes, 2x at 30, etc.
   const layoutNodes = layoutGraph(rfNodes, rfEdges, {
-    chargeStrength: -1500 * scale,
-    linkDistance: 350 * Math.sqrt(scale),
-    collideRadius: 200 * Math.sqrt(scale),
-    iterations: 300 + n * 3,
+    chargeStrength: -800 * scale,
+    linkDistance: 200 * Math.sqrt(scale),
+    collideRadius: 160 * Math.sqrt(scale),
+    iterations: 200 + n * 2,
     layerMap,
-    layerRadius: 400,
+    layerRadius: 250,
     fixedPositions,
   });
 
