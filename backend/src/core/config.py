@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     mongodb_url: str = "mongodb://mongodb:27017/financial_agent_v2"
     redis_url: str = "redis://redis:6379/0"
-    qdrant_url: str = "http://localhost:6333"
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "nexis-dev-password"
     secret_key: str = "dev-secret-change-in-production"
     cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"

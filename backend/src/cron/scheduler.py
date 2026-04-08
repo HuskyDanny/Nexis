@@ -114,6 +114,12 @@ async def run_news_pipeline() -> None:
             result.merged,
             result.rescored,
         )
+
+        # Fire-and-forget graph write for active news entities (graceful degradation)
+        from src.graph.writer import try_ingest_news_batch
+
+        active_articles = await repo.get_active()
+        try_ingest_news_batch(active_articles)
     except Exception as e:
         duration = (datetime.now(timezone.utc) - start).total_seconds()
         log.error("News pipeline failed after %.1fs: %s", duration, e)

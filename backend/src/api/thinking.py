@@ -239,6 +239,11 @@ async def think_step(session_id: str):
                     },
                 },
             )
+
+            # Fire-and-forget graph write (graceful degradation)
+            from src.graph.writer import try_ingest_thinking_layer
+
+            try_ingest_thinking_layer(session_id, next_layer, new_nodes)
         else:
             await col.update_one(
                 {"id": session_id},

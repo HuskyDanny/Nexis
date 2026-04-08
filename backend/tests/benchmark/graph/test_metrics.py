@@ -1,7 +1,7 @@
-"""Tests for RAG search quality metrics."""
+"""Tests for graph search quality metrics."""
 
 import pytest
-from tests.benchmark.rag.metrics import ndcg_at_k, recall_at_k, mrr
+from tests.benchmark.graph.metrics import ndcg_at_k, recall_at_k, mrr
 
 
 class TestNDCG:
