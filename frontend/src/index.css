@@ -135,25 +135,9 @@ body {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* React Flow node position animation — explode from center */
+/* React Flow node position animation — smooth transition */
 .react-flow__node {
-  transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-}
-
-/* Soft float on inner node content (not the wrapper — React Flow owns that transform) */
-.react-flow__node > div {
-  animation: nodeFloat 4s ease-in-out infinite;
-  animation-delay: calc(var(--float-delay, 0) * 1s);
-}
-
-@keyframes nodeFloat {
-  0%,
-  100% {
-    margin-top: 0;
-  }
-  50% {
-    margin-top: -3px;
-  }
+  transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1) !important;
 }
 
 /* Pool card floating animation */

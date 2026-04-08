@@ -44,11 +44,11 @@ export function nodeStyle(
       : `1px solid ${selected ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)"}`,
     borderLeft: !isOpp ? `3px solid ${color}` : undefined,
     borderRadius: isOpp ? 16 : 12,
-    padding: "10px 14px",
-    fontSize: 12,
+    padding: "8px 12px",
+    fontSize: 11,
     fontWeight: isOpp ? 700 : 500,
-    minWidth: 140,
-    maxWidth: 200,
+    minWidth: 120,
+    maxWidth: 180,
     textAlign: isOpp ? ("center" as const) : undefined,
     boxShadow: isOpp
       ? "0 0 25px rgba(34, 197, 94, 0.2), 0 4px 20px rgba(0,0,0,0.4)"
@@ -65,11 +65,12 @@ export function concentricPosition(
   layer: number,
   index: number,
   totalInLayer: number,
-  layerRadius: number = 180,
+  layerRadius: number = 350,
 ): { x: number; y: number } {
   if (layer === 0) {
+    // Scale layer-0 radius with node count so seeds never overlap
+    const r = totalInLayer > 1 ? Math.max(200, totalInLayer * 50) : 0;
     const angle = (index / Math.max(totalInLayer, 1)) * 2 * Math.PI;
-    const r = totalInLayer > 1 ? 60 : 0;
     return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
   }
   const r = layer * layerRadius;
@@ -146,14 +147,14 @@ export function buildThinkingGraph(
   );
   // Scale layout params with node count — more nodes need more space
   const n = nodes.length;
-  const scale = Math.max(1, n / 15); // 1x at 15 nodes, 2x at 30, etc.
+  const scale = Math.max(1, n / 10); // 1x at 10 nodes, 2x at 20, etc.
   const layoutNodes = layoutGraph(rfNodes, rfEdges, {
-    chargeStrength: -800 * scale,
-    linkDistance: 200 * Math.sqrt(scale),
-    collideRadius: 130 * Math.sqrt(scale),
-    iterations: 200 + n * 2,
+    chargeStrength: -1500 * scale,
+    linkDistance: 350 * Math.sqrt(scale),
+    collideRadius: 200 * Math.sqrt(scale),
+    iterations: 300 + n * 3,
     layerMap,
-    layerRadius: 250,
+    layerRadius: 400,
     fixedPositions,
   });
 

@@ -33,14 +33,23 @@ function StreamingNodeComponent({ data }: NodeProps) {
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div
         style={{
-          fontSize: 12,
-          lineHeight: 1.5,
-          minWidth: 140,
-          maxWidth: 200,
-          padding: "10px 14px",
+          fontSize: 11,
+          lineHeight: 1.4,
+          minWidth: 120,
+          maxWidth: 180,
+          padding: "8px 12px",
         }}
       >
-        <div>{d.label}</div>
+        <div
+          style={{
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+          }}
+        >
+          {d.label}
+        </div>
         {d.streaming && (
           <span
             className="inline-block w-1.5 h-3 ml-0.5 bg-current animate-pulse"
@@ -54,7 +63,7 @@ function StreamingNodeComponent({ data }: NodeProps) {
               className="mt-1 text-[10px]"
               style={{ color: isOpp ? "#86efac" : "#9ca3af" }}
             >
-              {d.confidence}% confidence
+              {d.confidence}%
             </div>
           )}
       </div>
