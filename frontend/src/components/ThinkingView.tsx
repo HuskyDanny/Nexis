@@ -16,11 +16,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import type { ThinkingSession, ThinkingNode } from "../types/thinking";
 import { buildThinkingGraph, nodeStyle } from "../lib/thinking-graph-builder";
-import {
-  LayerSpectrum,
-  OpportunitiesBanner,
-  NodeDetailPanel,
-} from "./ThinkingPanels";
+import { NodeDetailPanel } from "./ThinkingPanels";
 import { graphApi } from "../services/api";
 import { createLogger } from "../lib/logger";
 import { AgentFace } from "./AgentFace";
@@ -331,78 +327,73 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       className="flex-1 relative h-full w-full"
       onClick={handleContainerClick}
     >
-      <LayerSpectrum session={session} />
-
-      {/* Controls bar */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
-        <div className="glass-card px-4 py-2 flex items-center gap-3">
-          <span className="text-xs text-text-muted uppercase tracking-widest">
-            Layer {session?.current_layer ?? 0}/{session?.max_depth ?? 3}
+      {/* Minimal top-right control cluster */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+          style={{
+            background: "rgba(15, 20, 35, 0.8)",
+            backdropFilter: "blur(12px)",
+            border: "1px solid rgba(255,255,255,0.06)",
+          }}
+        >
+          <span className="text-[11px] font-mono" style={{ color: "#6b7394" }}>
+            {session?.current_layer ?? 0}/{session?.max_depth ?? 3}
           </span>
           {isThinking && (
             <span
-              className="flex items-center gap-1.5 text-xs"
-              style={{ color: "#f97316" }}
-            >
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-              Thinking...
-            </span>
+              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{ background: "#f97316" }}
+            />
           )}
           {session?.status === "complete" && (
-            <span className="text-xs" style={{ color: "#22c55e" }}>
-              Complete
-            </span>
-          )}
-          {session?.status === "error" && (
-            <span className="text-xs" style={{ color: "#ef4444" }}>
-              Error: {session.error}
-            </span>
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ background: "#22c55e" }}
+            />
           )}
         </div>
-
         {canStep && (
           <button
             onClick={handleStep}
             disabled={isThinking}
-            className="px-4 py-2 rounded-lg text-xs font-medium tracking-wide transition-all"
+            className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all"
             style={{
-              background: "rgba(249, 115, 22, 0.12)",
+              background: "rgba(249, 115, 22, 0.1)",
               color: "#f97316",
-              border: "1px solid rgba(249, 115, 22, 0.2)",
-              opacity: isThinking ? 0.5 : 1,
+              border: "1px solid rgba(249, 115, 22, 0.15)",
+              opacity: isThinking ? 0.4 : 1,
             }}
           >
-            Think Deeper
+            Deeper
           </button>
         )}
         {canMatch && (
           <button
             onClick={handleMatch}
             disabled={isThinking}
-            className="px-4 py-2 rounded-lg text-xs font-medium tracking-wide transition-all"
+            className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all"
             style={{
-              background: "rgba(34, 197, 94, 0.12)",
+              background: "rgba(34, 197, 94, 0.1)",
               color: "#22c55e",
-              border: "1px solid rgba(34, 197, 94, 0.2)",
-              opacity: isThinking ? 0.5 : 1,
+              border: "1px solid rgba(34, 197, 94, 0.15)",
+              opacity: isThinking ? 0.4 : 1,
             }}
           >
-            Find Opportunities
+            Match
           </button>
         )}
         <button
           onClick={onReset}
-          className="px-3 py-2 rounded-lg text-xs text-text-muted hover:text-text transition-colors"
+          className="px-2.5 py-1.5 rounded-lg text-[11px] text-text-muted hover:text-text transition-colors"
           style={{
             background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.05)",
           }}
         >
           Reset
         </button>
       </div>
-
-      <OpportunitiesBanner session={session} />
 
       {/* Agent face: only while thinking AND before any effect nodes arrive */}
       {isThinking && !hasEffectNodes && (

@@ -21,52 +21,48 @@ function StreamingNodeComponent({ data }: NodeProps) {
   }, []);
 
   const isOpp = d.type === "opportunity";
+  const isNews = d.type === "news";
+  const hasConf =
+    typeof d.confidence === "number" &&
+    !Number.isNaN(d.confidence) &&
+    !d.streaming;
 
   return (
     <div
+      className="nexis-node"
+      data-type={d.type}
+      data-layer={d.layer}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? "scale(1)" : "scale(0.8)",
-        transition: "opacity 400ms ease-out, transform 400ms ease-out",
+        transform: visible ? "scale(1)" : "scale(0.85)",
+        transition: "opacity 350ms ease-out, transform 350ms ease-out",
       }}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <div
-        style={{
-          fontSize: 11,
-          lineHeight: 1.4,
-          minWidth: 120,
-          maxWidth: 180,
-          padding: "8px 12px",
-        }}
-      >
-        <div
-          style={{
-            overflow: "hidden",
-            display: "-webkit-box",
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: "vertical",
-          }}
-        >
-          {d.label}
-        </div>
-        {d.streaming && (
-          <span
-            className="inline-block w-1.5 h-3 ml-0.5 bg-current animate-pulse"
-            style={{ opacity: 0.6 }}
-          />
-        )}
-        {typeof d.confidence === "number" &&
-          !Number.isNaN(d.confidence) &&
-          !d.streaming && (
-            <div
-              className="mt-1 text-[10px]"
-              style={{ color: isOpp ? "#86efac" : "#9ca3af" }}
-            >
-              {d.confidence}%
-            </div>
+
+      {isOpp ? (
+        /* ─── Opportunity: ticker + conviction front and center ─── */
+        <div className="nexis-node__opp">
+          <div className="nexis-node__opp-label">{d.label}</div>
+          {hasConf && (
+            <div className="nexis-node__opp-conf">{d.confidence}%</div>
           )}
-      </div>
+        </div>
+      ) : (
+        /* ─── News / Effect: compact pill ─── */
+        <div className="nexis-node__body">
+          {/* Type dot */}
+          <span className="nexis-node__dot" />
+          <div className="nexis-node__content">
+            <div className="nexis-node__text">{d.label}</div>
+            {d.streaming && <span className="nexis-node__cursor" />}
+            {hasConf && !isNews && (
+              <span className="nexis-node__conf">{d.confidence}%</span>
+            )}
+          </div>
+        </div>
+      )}
+
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   );

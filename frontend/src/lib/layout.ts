@@ -100,7 +100,7 @@ export function layoutGraph(
         },
         center.x,
         center.y,
-      ).strength(1.2),
+      ).strength(1.0),
     );
   }
 

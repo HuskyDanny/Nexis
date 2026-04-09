@@ -140,6 +140,96 @@ body {
   transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1) !important;
 }
 
+/* ─── Nexis Node System ─── */
+
+.nexis-node {
+  font-family: "DM Sans", "Inter", system-ui, sans-serif;
+  pointer-events: auto;
+}
+
+/* News & Effect pill */
+.nexis-node__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  min-width: 100px;
+  max-width: 180px;
+}
+
+.nexis-node__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 4px;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.nexis-node__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.nexis-node__text {
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.nexis-node__cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  margin-left: 2px;
+  background: currentColor;
+  opacity: 0.5;
+  animation: blink 1s step-end infinite;
+}
+
+.nexis-node__conf {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.5;
+  letter-spacing: 0.03em;
+}
+
+/* Opportunity node — centered, prominent */
+.nexis-node__opp {
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 90px;
+  max-width: 160px;
+}
+
+.nexis-node__opp-label {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.nexis-node__opp-conf {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  opacity: 0.9;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 /* Pool card floating animation */
 @keyframes float {
   0%,

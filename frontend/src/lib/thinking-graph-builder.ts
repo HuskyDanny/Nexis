@@ -31,29 +31,30 @@ export function nodeStyle(
   const layerColor = LAYER_COLORS[Math.min(layer, LAYER_COLORS.length - 1)];
   const color = type === "opportunity" ? TYPE_COLORS.opportunity : layerColor;
   const isOpp = type === "opportunity";
+
+  if (isOpp) {
+    return {
+      background: "rgba(34, 197, 94, 0.08)",
+      backdropFilter: "blur(16px)",
+      color: "#86efac",
+      border: "1.5px solid rgba(34, 197, 94, 0.35)",
+      borderRadius: 14,
+      boxShadow:
+        "0 0 30px rgba(34, 197, 94, 0.15), 0 0 60px rgba(34, 197, 94, 0.05)",
+      transition: "all 0.3s ease",
+    };
+  }
+
   return {
-    background: isOpp
-      ? "rgba(34, 197, 94, 0.15)"
-      : selected
-        ? "rgba(15, 20, 35, 0.85)"
-        : "rgba(15, 20, 35, 0.4)",
+    background: selected ? "rgba(15, 20, 35, 0.9)" : "rgba(15, 20, 35, 0.5)",
     backdropFilter: "blur(12px)",
-    color: selected ? (isOpp ? "#86efac" : "#f0f0f5") : "#6b7394",
-    border: isOpp
-      ? "2px solid rgba(34, 197, 94, 0.4)"
-      : `1px solid ${selected ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)"}`,
-    borderLeft: !isOpp ? `3px solid ${color}` : undefined,
-    borderRadius: isOpp ? 16 : 12,
-    padding: "8px 12px",
-    fontSize: 11,
-    fontWeight: isOpp ? 700 : 500,
-    minWidth: 120,
-    maxWidth: 180,
-    textAlign: isOpp ? ("center" as const) : undefined,
-    boxShadow: isOpp
-      ? "0 0 25px rgba(34, 197, 94, 0.2), 0 4px 20px rgba(0,0,0,0.4)"
-      : `0 4px 20px rgba(0,0,0,0.3), 0 0 15px ${color}10`,
-    transition: "background 0.3s, border-color 0.3s, color 0.3s",
+    color: selected ? color : "#6b7394",
+    border: `1px solid ${selected ? `${color}30` : "rgba(255,255,255,0.05)"}`,
+    borderRadius: 10,
+    boxShadow: selected
+      ? `0 0 20px ${color}12, 0 4px 16px rgba(0,0,0,0.3)`
+      : "0 2px 10px rgba(0,0,0,0.2)",
+    transition: "all 0.3s ease",
   };
 }
 
@@ -65,7 +66,7 @@ export function concentricPosition(
   layer: number,
   index: number,
   totalInLayer: number,
-  layerRadius: number = 400,
+  layerRadius: number = 300,
 ): { x: number; y: number } {
   if (layer === 0) {
     // News stays at center — small cluster
@@ -103,7 +104,7 @@ export function buildThinkingGraph(
     style: nodeStyle(n.type, n.selected, n.layer),
   }));
 
-  // Build React Flow edges
+  // Build React Flow edges — no labels to reduce clutter
   const rfEdges: RFEdge[] = edges.map((e, i) => {
     const isMatch = e.relationship === "matches";
     const isConfirm =
@@ -112,32 +113,26 @@ export function buildThinkingGraph(
       id: `e-${i}-${e.source}-${e.target}`,
       source: e.source,
       target: e.target,
-      label: e.relationship,
       type: "smoothstep",
-      animated: true,
+      animated: isMatch,
       markerEnd: {
         type: "arrowclosed" as const,
-        color: isMatch ? "rgba(34, 197, 94, 0.6)" : "rgba(255, 255, 255, 0.3)",
-        width: 15,
-        height: 15,
+        color: isMatch ? "rgba(34, 197, 94, 0.5)" : "rgba(255, 255, 255, 0.2)",
+        width: 12,
+        height: 12,
       },
       style: {
         stroke: isMatch
-          ? "rgba(34, 197, 94, 0.4)"
+          ? "rgba(34, 197, 94, 0.3)"
           : isConfirm
-            ? "rgba(255, 255, 255, 0.2)"
-            : "rgba(107, 115, 148, 0.3)",
-        strokeWidth: isMatch ? 2 : 1.5,
-      },
-      labelStyle: {
-        fill: isMatch ? "#86efac" : "#6b7394",
-        fontSize: 10,
+            ? "rgba(255, 255, 255, 0.12)"
+            : "rgba(107, 115, 148, 0.15)",
+        strokeWidth: isMatch ? 1.5 : 1,
       },
     };
   });
 
-  // Apply concentric ring layout — strong repulsion to prevent overlap
-  // Opportunity nodes go on outer ring (max_layer + 1) so they don't crowd the center
+  // Apply concentric ring layout
   const maxLayer = Math.max(...nodes.map((n) => n.layer ?? 0), 0);
   const layerMap = new Map(
     nodes.map((n) => [
@@ -145,16 +140,16 @@ export function buildThinkingGraph(
       n.type === "opportunity" ? maxLayer + 1 : (n.layer ?? 0),
     ]),
   );
-  // Scale layout params with node count — more nodes need more space
+  // Scale with node count — more nodes need more space
   const n = nodes.length;
-  const scale = Math.max(1, n / 15); // 1x at 15 nodes, 2x at 30, etc.
+  const scale = Math.max(1, n / 15);
   const layoutNodes = layoutGraph(rfNodes, rfEdges, {
-    chargeStrength: -800 * scale,
-    linkDistance: 200 * Math.sqrt(scale),
-    collideRadius: 160 * Math.sqrt(scale),
+    chargeStrength: -600 * scale,
+    linkDistance: 180 * Math.sqrt(scale),
+    collideRadius: 110 * Math.sqrt(scale),
     iterations: 200 + n * 2,
     layerMap,
-    layerRadius: 400,
+    layerRadius: 300,
     fixedPositions,
   });
 
