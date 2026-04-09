@@ -327,6 +327,36 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       className="flex-1 relative h-full w-full"
       onClick={handleContainerClick}
     >
+      {/* Layer color legend — bottom-left */}
+      <div
+        className="absolute bottom-12 left-4 z-20 flex flex-col gap-1.5"
+        style={{
+          background: "rgba(15, 20, 35, 0.7)",
+          backdropFilter: "blur(8px)",
+          border: "1px solid rgba(255,255,255,0.05)",
+          borderRadius: 8,
+          padding: "8px 10px",
+        }}
+      >
+        {[
+          ["#3b82f6", "News"],
+          ["#8b5cf6", "Effects L1"],
+          ["#f59e0b", "Effects L2"],
+          ["#ef4444", "Effects L3"],
+          ["#22c55e", "Opportunities"],
+        ].map(([color, label]) => (
+          <div key={label} className="flex items-center gap-2">
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ background: color, boxShadow: `0 0 4px ${color}` }}
+            />
+            <span className="text-[10px]" style={{ color: "#6b7394" }}>
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+
       {/* Minimal top-right control cluster */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
         <div
