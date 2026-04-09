@@ -96,8 +96,8 @@ export function buildThinkingGraph(
       reasoning: n.reasoning,
       streaming: false,
       confidence:
+        ((n as unknown as Record<string, unknown>).confidence as number) ??
         (n.metadata?.confidence as number) ??
-        (n as unknown as Record<string, unknown>).confidence ??
         undefined,
     },
     style: nodeStyle(n.type, n.selected, n.layer),
