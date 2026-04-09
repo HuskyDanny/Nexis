@@ -230,6 +230,189 @@ body {
   }
 }
 
+/* ─── Causal Chain (detail panel flowchart) ─── */
+
+.causal-chain {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 12px 16px;
+}
+
+.causal-chain__label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6b7394;
+  margin-bottom: 10px;
+}
+
+.causal-chain__flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.causal-chain__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.causal-chain__card {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+}
+
+.causal-chain__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.causal-chain__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.causal-chain__type {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.causal-chain__conf {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7394;
+}
+
+.causal-chain__text {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #c8cad0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.causal-chain__arrow {
+  padding: 2px 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* ─── Opportunity Strip (top hover panel) ─── */
+
+.opp-strip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  transition: all 0.25s ease;
+}
+
+.opp-strip__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(15, 20, 35, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  cursor: default;
+}
+
+.opp-strip__label {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #22c55e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.opp-strip__pips {
+  display: flex;
+  gap: 4px;
+}
+
+.opp-strip__pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+.opp-strip__list {
+  background: rgba(10, 14, 25, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(34, 197, 94, 0.12);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  min-width: 320px;
+}
+
+.opp-strip__item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.opp-strip__item:hover {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.opp-strip__item-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+
+.opp-strip__ticker {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #86efac;
+}
+
+.opp-strip__conv {
+  font-size: 14px;
+  font-weight: 800;
+  color: #22c55e;
+  letter-spacing: -0.02em;
+}
+
+.opp-strip__reasoning {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #6b7394;
+}
+
 /* Pool card floating animation */
 @keyframes float {
   0%,

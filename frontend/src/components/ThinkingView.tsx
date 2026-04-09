@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import type { ThinkingSession, ThinkingNode } from "../types/thinking";
 import { buildThinkingGraph, nodeStyle } from "../lib/thinking-graph-builder";
 import { NodeDetailPanel } from "./ThinkingPanels";
+import { OpportunityStrip } from "./OpportunityStrip";
 import { graphApi } from "../services/api";
 import { createLogger } from "../lib/logger";
 import { AgentFace } from "./AgentFace";
@@ -425,6 +426,13 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
         </button>
       </div>
 
+      {/* Opportunity strip — top center, hover to expand */}
+      <OpportunityStrip
+        session={session}
+        onHighlight={(nodeId) => pinPath(nodeId)}
+        onClearHighlight={() => unpinPath()}
+      />
+
       {/* Agent face: only while thinking AND before any effect nodes arrive */}
       {isThinking && !hasEffectNodes && (
         <div
@@ -463,6 +471,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       {selectedNode && (
         <NodeDetailPanel
           node={selectedNode}
+          session={session}
           onClose={() => setSelectedNode(null)}
           onToggle={handleToggle}
           onRegenerate={
