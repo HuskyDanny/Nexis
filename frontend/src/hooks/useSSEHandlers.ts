@@ -2,7 +2,7 @@
  * useSSEHandlers — SSE event handlers for ThinkingView streaming.
  * Manages node/edge mutations in response to SSE events from the thinking pipeline.
  */
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Node as RFNode, Edge as RFEdge } from "@xyflow/react";
 import type {
   ThinkingNode,
@@ -206,6 +206,9 @@ export function useSSEHandlers({
     [setEdges, setSession],
   );
 
+  // Separate counter for opportunity nodes — they go on their own outer ring
+  const oppCount = useRef(0);
+
   const handleOpportunity = useCallback(
     (data: Record<string, unknown>) => {
       const opp = data as {
@@ -217,30 +220,48 @@ export function useSSEHandlers({
         confidence: number;
         parents: string[];
       };
-      const layer = opp.layer ?? 0;
-      const count = (layerNodeCounts.current.get(layer) ?? 0) + 1;
-      layerNodeCounts.current.set(layer, count);
+      // Place opportunities on a dedicated outer ring, not mixed with effects
+      const maxEffectLayer = Math.max(
+        ...Array.from(layerNodeCounts.current.keys()),
+        1,
+      );
+      const oppRing = maxEffectLayer + 1;
+      oppCount.current += 1;
+      const total = oppCount.current;
 
-      const pos = concentricPosition(layer, count - 1, count);
-      positionMap.current.set(opp.id, pos);
+      // Single setNodes: re-space existing opps + add the new one
+      setNodes((prev) => {
+        const updated = prev.map((n) => {
+          if (n.data.type !== "opportunity") return n;
+          const existingIdx = prev
+            .filter((p) => p.data.type === "opportunity")
+            .indexOf(n);
+          const newPos = concentricPosition(oppRing, existingIdx, total);
+          positionMap.current.set(n.id, newPos);
+          return { ...n, position: newPos };
+        });
 
-      setNodes((prev) => [
-        ...prev,
-        {
-          id: opp.id,
-          type: "streaming",
-          position: pos,
-          data: {
-            label: opp.content,
-            type: "opportunity",
-            layer,
-            selected: true,
-            reasoning: opp.reasoning,
-            confidence: opp.confidence,
+        const pos = concentricPosition(oppRing, total - 1, total);
+        positionMap.current.set(opp.id, pos);
+
+        return [
+          ...updated,
+          {
+            id: opp.id,
+            type: "streaming",
+            position: pos,
+            data: {
+              label: opp.content,
+              type: "opportunity",
+              layer: opp.layer,
+              selected: true,
+              reasoning: opp.reasoning,
+              confidence: opp.confidence,
+            },
+            style: nodeStyle("opportunity", true, opp.layer),
           },
-          style: nodeStyle("opportunity", true, layer),
-        },
-      ]);
+        ];
+      });
 
       setSession((prev) => {
         if (!prev) return prev;
@@ -250,7 +271,7 @@ export function useSSEHandlers({
             ...prev.nodes,
             {
               id: opp.id,
-              layer,
+              layer: opp.layer,
               type: "opportunity" as const,
               content: opp.content,
               reasoning: opp.reasoning ?? "",
