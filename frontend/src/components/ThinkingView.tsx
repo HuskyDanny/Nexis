@@ -429,8 +429,12 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       {/* Opportunity strip — top center, hover to expand */}
       <OpportunityStrip
         session={session}
-        onHighlight={(nodeId) => pinPath(nodeId)}
-        onClearHighlight={() => unpinPath()}
+        pinnedNodeId={pinnedNodeId}
+        onHighlight={pinPath}
+        onPin={(id) => (pinnedNodeId === id ? unpinPath() : pinPath(id))}
+        onClearHighlight={() => {
+          if (!pinnedNodeId) unpinPath();
+        }}
       />
 
       {/* Agent face: only while thinking AND before any effect nodes arrive */}

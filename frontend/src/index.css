@@ -378,7 +378,17 @@ body {
   border-radius: 8px;
   border: 1px solid transparent;
   transition: all 0.2s ease;
-  cursor: default;
+  cursor: pointer;
+}
+
+.opp-strip__item[data-pinned="true"] {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.opp-strip__pip[data-pinned="true"] {
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.8);
+  transform: scale(1.3);
 }
 
 .opp-strip__item:hover {

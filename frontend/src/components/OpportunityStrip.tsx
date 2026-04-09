@@ -1,18 +1,22 @@
 /**
  * OpportunityStrip — thin top bar showing green pips for each opportunity.
  * Expands on hover to reveal full list with ticker, conviction, and summary.
- * Hovering an item highlights the corresponding node in the graph.
+ * Click to pin (same as clicking opportunity node in graph). Hover to preview.
  */
 import { useState } from "react";
 import type { ThinkingSession } from "../types/thinking";
 
 export function OpportunityStrip({
   session,
+  pinnedNodeId,
   onHighlight,
+  onPin,
   onClearHighlight,
 }: {
   session: ThinkingSession | null;
+  pinnedNodeId: string | null;
   onHighlight: (nodeId: string) => void;
+  onPin: (nodeId: string) => void;
   onClearHighlight: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -28,7 +32,8 @@ export function OpportunityStrip({
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => {
         setExpanded(false);
-        onClearHighlight();
+        // Only clear highlight if nothing is pinned
+        if (!pinnedNodeId) onClearHighlight();
       }}
     >
       {/* Collapsed: just green pips */}
@@ -38,7 +43,11 @@ export function OpportunityStrip({
         </span>
         <div className="opp-strip__pips">
           {opps.map((o) => (
-            <span key={o.id} className="opp-strip__pip" />
+            <span
+              key={o.id}
+              className="opp-strip__pip"
+              data-pinned={pinnedNodeId === o.id}
+            />
           ))}
         </div>
       </div>
@@ -52,16 +61,25 @@ export function OpportunityStrip({
               (o.metadata?.confidence as number) ??
               0;
             const ticker = o.content.split("—")[0]?.trim() ?? o.content;
+            const isPinned = pinnedNodeId === o.id;
             return (
               <div
                 key={o.id}
                 className="opp-strip__item"
-                onMouseEnter={() => onHighlight(o.id)}
-                onMouseLeave={() => onClearHighlight()}
+                data-pinned={isPinned}
+                onClick={() => onPin(o.id)}
+                onMouseEnter={() => {
+                  if (!pinnedNodeId) onHighlight(o.id);
+                }}
+                onMouseLeave={() => {
+                  if (!pinnedNodeId) onClearHighlight();
+                }}
               >
                 <div className="opp-strip__item-header">
                   <span className="opp-strip__ticker">{ticker}</span>
-                  <span className="opp-strip__conv">{Math.round(conf)}%</span>
+                  <span className="opp-strip__conv">
+                    {Math.round(conf)}%{isPinned && " \u2022"}
+                  </span>
                 </div>
                 <div className="opp-strip__reasoning">
                   {o.reasoning?.slice(0, 120) || "No reasoning available"}
