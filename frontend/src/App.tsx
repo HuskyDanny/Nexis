@@ -32,25 +32,20 @@ function App() {
   const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
+  // URL hash shortcut: #session=<id> loads a session directly
+  const hashMatch = window.location.hash.match(/session=([a-f0-9]+)/);
   const [phase, setPhase] = useState<
     "pools" | "connecting" | "done" | "thinking"
-  >("pools");
+  >(hashMatch ? "thinking" : "pools");
   const [convergences, setConvergences] = useState<Convergence[]>([]);
   const connectingRef = useRef(false);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const [thinkingSessionId, setThinkingSessionId] = useState<string | null>(
-    null,
+    hashMatch ? hashMatch[1] : null,
   );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // URL hash shortcut: #session=<id> loads a session directly
-    const match = window.location.hash.match(/session=([a-f0-9]+)/);
-    if (match) {
-      setThinkingSessionId(match[1]);
-      setPhase("thinking");
-    }
-
     const date = todayDate();
     log.info("Loading live pools for", date);
     graphApi
