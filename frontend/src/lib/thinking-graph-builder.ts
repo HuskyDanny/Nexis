@@ -65,10 +65,10 @@ export function concentricPosition(
   layer: number,
   index: number,
   totalInLayer: number,
-  layerRadius: number = 250,
+  layerRadius: number = 400,
 ): { x: number; y: number } {
   if (layer === 0) {
-    // Keep news at center — small cluster, d3 radial also targets radius 0
+    // News stays at center — small cluster
     const r = totalInLayer > 1 ? 80 : 0;
     const angle = (index / Math.max(totalInLayer, 1)) * 2 * Math.PI;
     return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
@@ -154,7 +154,7 @@ export function buildThinkingGraph(
     collideRadius: 160 * Math.sqrt(scale),
     iterations: 200 + n * 2,
     layerMap,
-    layerRadius: 250,
+    layerRadius: 400,
     fixedPositions,
   });
 

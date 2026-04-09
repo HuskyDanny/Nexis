@@ -206,6 +206,68 @@ export function useSSEHandlers({
     [setEdges, setSession],
   );
 
+  const handleOpportunity = useCallback(
+    (data: Record<string, unknown>) => {
+      const opp = data as {
+        id: string;
+        layer: number;
+        type: string;
+        content: string;
+        reasoning: string;
+        confidence: number;
+        parents: string[];
+      };
+      const layer = opp.layer ?? 0;
+      const count = (layerNodeCounts.current.get(layer) ?? 0) + 1;
+      layerNodeCounts.current.set(layer, count);
+
+      const pos = concentricPosition(layer, count - 1, count);
+      positionMap.current.set(opp.id, pos);
+
+      setNodes((prev) => [
+        ...prev,
+        {
+          id: opp.id,
+          type: "streaming",
+          position: pos,
+          data: {
+            label: opp.content,
+            type: "opportunity",
+            layer,
+            selected: true,
+            reasoning: opp.reasoning,
+            confidence: opp.confidence,
+          },
+          style: nodeStyle("opportunity", true, layer),
+        },
+      ]);
+
+      setSession((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          nodes: [
+            ...prev.nodes,
+            {
+              id: opp.id,
+              layer,
+              type: "opportunity" as const,
+              content: opp.content,
+              reasoning: opp.reasoning ?? "",
+              sources: [],
+              parents: opp.parents ?? [],
+              selected: true,
+              metadata: data,
+            },
+          ],
+        };
+      });
+
+      log.info("Opportunity node:", opp.content);
+    },
+    [setNodes, setSession, layerNodeCounts, positionMap],
+  );
+
   const handleLayerComplete = useCallback(
     (data: SSELayerComplete) => {
       setSession((prev) => {
@@ -234,6 +296,7 @@ export function useSSEHandlers({
     handleNodeText,
     handleNodeComplete,
     handleEdges,
+    handleOpportunity,
     handleLayerComplete,
     handleSessionComplete,
   };

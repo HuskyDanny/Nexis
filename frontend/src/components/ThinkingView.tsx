@@ -61,6 +61,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
     handleNodeText,
     handleNodeComplete,
     handleEdges,
+    handleOpportunity,
     handleLayerComplete,
     handleSessionComplete,
   } = useSSEHandlers({
@@ -196,6 +197,7 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       onNodeText: handleNodeText,
       onNodeComplete: handleNodeComplete,
       onEdges: handleEdges,
+      onOpportunity: handleOpportunity,
       onLayerComplete: handleLayerComplete,
       onSessionComplete: handleSessionComplete,
       onError: (err) =>

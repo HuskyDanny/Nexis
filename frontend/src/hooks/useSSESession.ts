@@ -14,6 +14,7 @@ interface SSECallbacks {
   onNodeText?: (data: SSENodeText) => void;
   onNodeComplete?: (data: SSENodeComplete) => void;
   onEdges?: (data: SSEEdgesPayload) => void;
+  onOpportunity?: (data: Record<string, unknown>) => void;
   onLayerComplete?: (data: SSELayerComplete) => void;
   onSessionComplete?: (data: SSESessionComplete) => void;
   onError?: (data: SSEError) => void;
@@ -57,6 +58,9 @@ export function useSSESession(
       });
       es.addEventListener("edges", (e: MessageEvent) => {
         cbRef.current?.onEdges?.(JSON.parse(e.data));
+      });
+      es.addEventListener("opportunity", (e: MessageEvent) => {
+        cbRef.current?.onOpportunity?.(JSON.parse(e.data));
       });
       es.addEventListener("layer_complete", (e: MessageEvent) => {
         cbRef.current?.onLayerComplete?.(JSON.parse(e.data));
