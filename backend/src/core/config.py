@@ -43,7 +43,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_production_secrets(self) -> "Settings":
-        if self.environment == "development":
+        if self.environment in ("development", "test"):
             return self
         missing: list[str] = []
         if not self.neo4j_password:

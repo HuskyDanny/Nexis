@@ -33,8 +33,11 @@ def _make_app() -> FastAPI:
 
 @pytest.fixture
 def dev_client():
-    """Client that returns error responses (does not re-raise server exceptions)."""
-    return TestClient(_make_app(), raise_server_exceptions=False)
+    """Client with development settings — leaks exception details."""
+    with patch("src.api.errors.settings") as mock_settings:
+        mock_settings.environment = "development"
+        app = _make_app()
+        yield TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture

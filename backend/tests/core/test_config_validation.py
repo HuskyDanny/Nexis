@@ -57,7 +57,7 @@ class TestProductionValidation:
 
 
 class TestDevelopmentValidation:
-    """Development mode must accept empty/default secrets for backward compat."""
+    """Development and test modes must accept empty/default secrets for backward compat."""
 
     def test_empty_secrets_allowed(self):
         s = _settings(environment="development")
@@ -67,6 +67,12 @@ class TestDevelopmentValidation:
     def test_dev_default_secret_key_allowed(self):
         s = _settings(environment="development", secret_key="dev-test-key")
         assert s.secret_key == "dev-test-key"
+
+    def test_test_environment_skips_validation(self):
+        s = _settings(environment="test")
+        assert s.environment == "test"
+        assert s.neo4j_password == ""
+        assert s.secret_key == ""
 
 
 class TestNewConfigFields:
