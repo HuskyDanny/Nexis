@@ -16,6 +16,7 @@ from src.agents.thinking_crew import (
     run_thinker,
 )
 from src.agents.thinking_helpers import THINKER_SKILLS, parse_json_response
+from src.core.exceptions import ThinkingError
 from src.core.logger import get_logger
 from src.services.session_events import SSEEvent, SessionRegistry
 from src.services.stream_parser import IncrementalEffectsParser
@@ -117,8 +118,13 @@ async def run_layer(
                 session_id=session_id,
             )
         )
+    except ThinkingError as e:
+        log.error("Thinker agent error at layer %d: %s", layer, e)
+        return _empty_layer_result(f"Thinker failed: {e}", {"thinker": thinker_tokens})
     except Exception as e:
-        log.error("Thinker failed at layer %d: %s", layer, e)
+        log.error(
+            "Thinker unexpected error at layer %d (%s): %s", layer, type(e).__name__, e
+        )
         return _empty_layer_result(f"Thinker failed: {e}", {"thinker": thinker_tokens})
 
     if not effect_nodes:

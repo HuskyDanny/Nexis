@@ -82,6 +82,14 @@ async def startup():
     return {"status": "ok"}
 
 
+@router.get("/cron")
+async def cron_status():
+    """Return observable state for all registered cron jobs."""
+    from src.main import cron
+
+    return cron.get_status()
+
+
 @router.get("")
 async def health_legacy():
     """Backward-compatible health endpoint."""

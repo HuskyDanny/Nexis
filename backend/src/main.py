@@ -13,6 +13,7 @@ from src.api.thinking import router as thinking_router
 from src.api.thinking_auto import router as thinking_auto_router
 from src.core.config import settings
 from src.core.logger import get_logger
+from src.cron.manager import CronManager, JobConfig
 from src.database.mongodb import mongodb
 from src.database.redis import redis_client
 from src.middleware.request_logging import RequestMiddleware
@@ -20,43 +21,14 @@ from src.services.session_events import registry
 
 log = get_logger("app")
 
+cron = CronManager()
+
 
 async def _periodic_health_check():
     """Run SSE session health check every 30 seconds."""
     while True:
         await asyncio.sleep(30)
         await registry.health_check()
-
-
-async def _run_pipelines_once():
-    """Pre-populate news + value pools on startup."""
-    from src.cron.scheduler import run_news_pipeline, run_value_pipeline
-
-    try:
-        await run_news_pipeline()
-    except Exception as e:
-        log.warning("Startup news pipeline failed (non-fatal): %s", e)
-    try:
-        await run_value_pipeline()
-    except Exception as e:
-        log.warning("Startup value pipeline failed (non-fatal): %s", e)
-
-
-async def _periodic_pipeline_refresh():
-    """Re-run pipelines every 2 hours to keep pools fresh."""
-    from src.cron.scheduler import run_news_pipeline, run_value_pipeline
-
-    while True:
-        await asyncio.sleep(settings.news_cron_interval_hours * 3600)
-        log.info("Cron: refreshing news + value pipelines")
-        try:
-            await run_news_pipeline()
-        except Exception as e:
-            log.warning("Cron news pipeline failed: %s", e)
-        try:
-            await run_value_pipeline()
-        except Exception as e:
-            log.warning("Cron value pipeline failed: %s", e)
 
 
 @asynccontextmanager
@@ -93,13 +65,31 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     except Exception as e:
         log.warning("Graph initialization failed (non-fatal): %s", e)
 
-    # Pre-populate pools on startup (non-blocking background task)
-    log.info("Pre-populating news + value pools")
-    prepopulate_task = asyncio.create_task(_run_pipelines_once())
+    # Register cron jobs (lazy import to avoid circular deps)
+    from src.cron.scheduler import run_news_pipeline, run_value_pipeline
 
-    # Start periodic tasks
+    cron.register(
+        JobConfig(
+            name="news_pipeline",
+            handler=run_news_pipeline,
+            interval_seconds=settings.news_cron_interval_hours * 3600,
+            max_retries=2,
+            run_on_start=True,
+        )
+    )
+    cron.register(
+        JobConfig(
+            name="value_pipeline",
+            handler=run_value_pipeline,
+            interval_seconds=settings.news_cron_interval_hours * 3600,
+            max_retries=2,
+            run_on_start=True,
+        )
+    )
+    await cron.start_all()
+
+    # SSE health check (not a cron job — lightweight, high-frequency)
     health_task = asyncio.create_task(_periodic_health_check())
-    cron_task = asyncio.create_task(_periodic_pipeline_refresh())
 
     yield
 
@@ -108,12 +98,13 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     # Drain active SSE sessions first (notify clients)
     await registry.shutdown_all()
 
-    for task in [health_task, cron_task, prepopulate_task]:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    health_task.cancel()
+    try:
+        await health_task
+    except asyncio.CancelledError:
+        pass
+
+    await cron.shutdown()
 
     # Close shared HTTP client pool
     try:
