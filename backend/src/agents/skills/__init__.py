@@ -8,6 +8,10 @@ import importlib
 import pkgutil
 from pathlib import Path
 
+from src.core.logger import get_logger
+
+log = get_logger("skills")
+
 _skills: dict[str, dict] = {}
 _scanned = False
 
@@ -26,8 +30,8 @@ def _scan_skills():
             if hasattr(mod, "SKILL"):
                 skill = mod.SKILL
                 _skills[skill["name"]] = skill
-        except Exception:
-            pass  # Skip broken skill files silently
+        except Exception as e:
+            log.warning("Failed to load skill module %s: %s", module_info.name, e)
     _scanned = True
 
 

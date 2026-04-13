@@ -7,7 +7,14 @@ class MongoDB:
         self.db: AsyncIOMotorDatabase | None = None
 
     async def connect(self, url: str):
-        self.client = AsyncIOMotorClient(url)
+        self.client = AsyncIOMotorClient(
+            url,
+            maxPoolSize=20,
+            minPoolSize=2,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            socketTimeoutMS=30000,
+        )
         db_name = url.rsplit("/", 1)[-1].split("?")[0]
         self.db = self.client[db_name]
         await self.db.command("ping")

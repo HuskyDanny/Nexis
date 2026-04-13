@@ -4,17 +4,17 @@ RATE LIMIT: 150 calls/month. Every call is cached in MongoDB.
 Max 10 calls per session. Check cache first, always.
 """
 
-import os
 from datetime import datetime, timezone
 
 import httpx
 
+from src.core.config import settings
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
 
 log = get_logger("perigon")
 
-PERIGON_API_KEY = os.environ.get("PERIGON_API_KEY", "")
+PERIGON_API_KEY = settings.perigon_api_key
 PERIGON_BASE_URL = "https://api.goperigon.com/v1"
 
 

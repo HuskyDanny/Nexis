@@ -21,7 +21,7 @@ interface SSECallbacks {
 }
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 5000;
+const BASE_DELAY_MS = 1000;
 
 export function useSSESession(
   sessionId: string | null,
@@ -84,11 +84,9 @@ export function useSSESession(
         setConnected(false);
         es.close();
         if (retriesRef.current < MAX_RETRIES) {
+          const delay = BASE_DELAY_MS * Math.pow(2, retriesRef.current);
           retriesRef.current += 1;
-          timeoutRef.current = setTimeout(
-            () => connectRef.current(),
-            RETRY_DELAY_MS,
-          );
+          timeoutRef.current = setTimeout(() => connectRef.current(), delay);
         } else {
           cbRef.current?.onError?.({
             error: "SSE connection failed after retries",

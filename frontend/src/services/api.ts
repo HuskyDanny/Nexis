@@ -1,8 +1,21 @@
 import axios from "axios";
 import type { DailyGraph, Layer, Market } from "../types/graph";
 import type { ThinkingNode, ThinkingSession } from "../types/thinking";
+import { toast } from "../lib/toast";
 
 const api = axios.create({ baseURL: "/api" });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const message =
+      error.response?.data?.detail ||
+      error.response?.data?.error ||
+      error.message;
+    toast.error(message);
+    return Promise.reject(error);
+  },
+);
 
 export interface PoolItem {
   id: string;
