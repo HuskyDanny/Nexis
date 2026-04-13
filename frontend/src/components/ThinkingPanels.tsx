@@ -1,8 +1,9 @@
 /**
- * Extracted UI panels for ThinkingView — spectrum, opportunities banner, node detail.
+ * Extracted UI panels for ThinkingView — node detail with causal chain.
  */
 import type { ThinkingNode, ThinkingSession } from "../types/thinking";
 import { LAYER_COLORS } from "../lib/thinking-graph-builder";
+import { CausalChain } from "./CausalChain";
 
 /* ─── Layer Spectrum ─── */
 export function LayerSpectrum({
@@ -91,11 +92,13 @@ export function OpportunitiesBanner({
 /* ─── Node Detail Panel ─── */
 export function NodeDetailPanel({
   node,
+  session,
   onClose,
   onToggle,
   onRegenerate,
 }: {
   node: ThinkingNode;
+  session: ThinkingSession | null;
   onClose: () => void;
   onToggle: (nodeId: string, selected: boolean) => void;
   onRegenerate?: () => void;
@@ -136,6 +139,7 @@ export function NodeDetailPanel({
           ))}
         </div>
       )}
+      {session && <CausalChain node={node} session={session} />}
       <div className="px-4 py-3 flex flex-col gap-2">
         <button
           onClick={() => onToggle(node.id, !node.selected)}

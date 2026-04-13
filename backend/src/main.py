@@ -26,6 +26,37 @@ async def _periodic_health_check():
         await registry.health_check()
 
 
+async def _run_pipelines_once():
+    """Pre-populate news + value pools on startup."""
+    from src.cron.scheduler import run_news_pipeline, run_value_pipeline
+
+    try:
+        await run_news_pipeline()
+    except Exception as e:
+        log.warning("Startup news pipeline failed (non-fatal): %s", e)
+    try:
+        await run_value_pipeline()
+    except Exception as e:
+        log.warning("Startup value pipeline failed (non-fatal): %s", e)
+
+
+async def _periodic_pipeline_refresh():
+    """Re-run pipelines every 2 hours to keep pools fresh."""
+    from src.cron.scheduler import run_news_pipeline, run_value_pipeline
+
+    while True:
+        await asyncio.sleep(settings.news_cron_interval_hours * 3600)
+        log.info("Cron: refreshing news + value pipelines")
+        try:
+            await run_news_pipeline()
+        except Exception as e:
+            log.warning("Cron news pipeline failed: %s", e)
+        try:
+            await run_value_pipeline()
+        except Exception as e:
+            log.warning("Cron value pipeline failed: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):  # noqa: ARG001
     log.info("Starting up — connecting to MongoDB")
@@ -60,17 +91,23 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     except Exception as e:
         log.warning("Graph initialization failed (non-fatal): %s", e)
 
-    # Start periodic SSE health check
+    # Pre-populate pools on startup (non-blocking background task)
+    log.info("Pre-populating news + value pools")
+    prepopulate_task = asyncio.create_task(_run_pipelines_once())
+
+    # Start periodic tasks
     health_task = asyncio.create_task(_periodic_health_check())
+    cron_task = asyncio.create_task(_periodic_pipeline_refresh())
 
     yield
 
     log.info("Shutting down")
-    health_task.cancel()
-    try:
-        await health_task
-    except asyncio.CancelledError:
-        pass
+    for task in [health_task, cron_task, prepopulate_task]:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     try:
         await close_graph_services()

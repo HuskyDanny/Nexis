@@ -93,10 +93,14 @@ export function layoutGraph(
     simulation.force(
       "radial",
       forceRadial<ForceNode>(
-        (d) => (layerMap.get(d.id) ?? 0) * layerRadius,
+        (d) => {
+          const layer = layerMap.get(d.id) ?? 0;
+          // Layer 0 gets a small inner ring; other layers start at layerRadius
+          return layer === 0 ? 80 : layer * layerRadius;
+        },
         center.x,
         center.y,
-      ).strength(0.8),
+      ).strength(1.0),
     );
   }
 

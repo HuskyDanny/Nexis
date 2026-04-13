@@ -310,6 +310,22 @@ async def run_layer_streaming(
             _push("layer_complete", {"layer": layer, "reason": "no effects"})
             return _empty_layer_result("Thinker produced no effects")
 
+        # Remap batch IDs → streaming IDs so edges reference frontend node IDs.
+        # Both lists iterate effects_raw in order, so index alignment works.
+        batch_to_stream: dict[str, str] = {}
+        for idx, node in enumerate(effect_nodes):
+            stream_id = index_to_id.get(idx)
+            if stream_id:
+                batch_to_stream[node["id"]] = stream_id
+                node["id"] = stream_id  # update node ID too
+
+        for edge in effect_edges:
+            edge["source"] = batch_to_stream.get(edge["source"], edge["source"])
+            edge["target"] = batch_to_stream.get(edge["target"], edge["target"])
+        for edge in fetch_edges:
+            edge["source"] = batch_to_stream.get(edge["source"], edge["source"])
+            edge["target"] = batch_to_stream.get(edge["target"], edge["target"])
+
         all_edges = list(effect_edges) + list(fetch_edges)
 
         # Push edges from thinker

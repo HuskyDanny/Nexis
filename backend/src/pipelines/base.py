@@ -47,15 +47,17 @@ class PoolPipeline:
         touched: set[str] = set()
         for raw in raw_items:
             pr = await self.process.process(raw, existing)
-            sr: ScoreResult = self.score.score(raw)
 
             if pr.action == "merge" and pr.entity_id in existing_by_id:
-                # Merge: preserve existing fields, overlay raw + new scores
                 entity = {**existing_by_id[pr.entity_id], **raw}
             else:
                 entity = {**raw}
 
             entity["id"] = pr.entity_id
+            entity["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+
+            # Score after setting last_seen_at (freshness depends on it)
+            sr: ScoreResult = self.score.score(entity)
             entity["score"] = sr.score
             entity["score_factors"] = sr.factors
             entity["status"] = (
