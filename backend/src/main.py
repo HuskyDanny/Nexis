@@ -125,8 +125,8 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
 
     try:
         await close_graph_services()
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("Graph services close failed (non-fatal): %s", e)
     await redis_client.close()
     await mongodb.close()
 
