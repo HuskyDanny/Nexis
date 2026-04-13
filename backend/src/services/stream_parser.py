@@ -93,7 +93,9 @@ class IncrementalEffectsParser:
                     if len(complete) > self._completed_count:
                         return complete
         except Exception:
-            pass
+            log.debug(
+                "JSON repair failed during extract_effects (expected for partial chunks)"
+            )
         return None
 
     def _emit_partial_deltas(self, text: str) -> list[dict[str, Any]]:
@@ -132,5 +134,7 @@ class IncrementalEffectsParser:
                             )
                             self._last_content_len[i][field_name] = len(val)
         except Exception:
-            pass
+            log.debug(
+                "JSON repair failed during emit_partial_deltas (expected for partial chunks)"
+            )
         return events
