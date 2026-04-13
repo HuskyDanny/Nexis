@@ -21,6 +21,7 @@ import { OpportunityStrip } from "./OpportunityStrip";
 import { graphApi } from "../services/api";
 import { createLogger } from "../lib/logger";
 import { AgentFace } from "./AgentFace";
+import { LayerLegend } from "./LayerLegend";
 import { usePathHighlight } from "../hooks/usePathHighlight";
 import { StreamingNode } from "./StreamingNode";
 import { useSSESession } from "../hooks/useSSESession";
@@ -323,40 +324,32 @@ export function ThinkingView({ sessionId, onReset }: ThinkingViewProps) {
       ((n.data as Record<string, unknown>).layer as number) > 0,
   );
 
+  // Loading state while session is being fetched
+  if (!session) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+            style={{
+              borderColor: "rgba(249, 115, 22, 0.6)",
+              borderTopColor: "transparent",
+            }}
+          />
+          <p className="text-text-muted text-xs tracking-widest uppercase">
+            Loading session…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex-1 relative h-full w-full"
       onClick={handleContainerClick}
     >
-      {/* Layer color legend — bottom-left */}
-      <div
-        className="absolute bottom-12 left-4 z-20 flex flex-col gap-1.5"
-        style={{
-          background: "rgba(15, 20, 35, 0.7)",
-          backdropFilter: "blur(8px)",
-          border: "1px solid rgba(255,255,255,0.05)",
-          borderRadius: 8,
-          padding: "8px 10px",
-        }}
-      >
-        {[
-          ["#3b82f6", "News"],
-          ["#8b5cf6", "Effects L1"],
-          ["#f59e0b", "Effects L2"],
-          ["#ef4444", "Effects L3"],
-          ["#22c55e", "Opportunities"],
-        ].map(([color, label]) => (
-          <div key={label} className="flex items-center gap-2">
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ background: color, boxShadow: `0 0 4px ${color}` }}
-            />
-            <span className="text-[10px]" style={{ color: "#6b7394" }}>
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
+      <LayerLegend />
 
       {/* Minimal top-right control cluster */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-2">

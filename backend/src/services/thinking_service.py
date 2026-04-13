@@ -62,7 +62,7 @@ def _empty_layer_result(
 
 
 async def _call_with_retry(func, *args, **kwargs):
-    """Call a sync function in an executor with timeout and 1 retry."""
+    """Call a sync function in an executor with timeout, retry, and exponential backoff."""
     loop = asyncio.get_running_loop()
     last_err = None
     for attempt in range(1 + AGENT_RETRIES):
@@ -72,12 +72,19 @@ async def _call_with_retry(func, *args, **kwargs):
                 timeout=AGENT_TIMEOUT_S,
             )
             return result
+        except asyncio.CancelledError:
+            raise  # Never swallow cancellation — needed for clean shutdown
         except Exception as e:
             last_err = e
             if attempt < AGENT_RETRIES:
+                backoff = min(2**attempt, 10)
                 log.warning(
-                    "Agent call failed (attempt %d), retrying: %s", attempt + 1, e
+                    "Agent call failed (attempt %d), retrying in %ds: %s",
+                    attempt + 1,
+                    backoff,
+                    e,
                 )
+                await asyncio.sleep(backoff)
     raise last_err  # type: ignore[misc]
 
 

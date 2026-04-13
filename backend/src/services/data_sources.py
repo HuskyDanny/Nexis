@@ -3,18 +3,14 @@
 Falls back to mock data when APIs are unavailable or rate-limited.
 """
 
-import os
 from typing import Any
 
 import httpx
 
+from src.core.config import settings
 from src.core.logger import get_logger
 
 log = get_logger("data_sources")
-
-ALPHA_VANTAGE_KEY = os.environ.get(
-    "ALPHA_VANTAGE_API_KEY", "IL2J1EVKMUH1PEJI"
-)  # v1 key as default
 
 
 async def fetch_real_news(limit: int = 10, topics: str = "") -> list[dict]:
@@ -41,7 +37,7 @@ async def _fetch_alpha_vantage_news(limit: int = 10, topics: str = "") -> list[d
     try:
         params: dict[str, Any] = {
             "function": "NEWS_SENTIMENT",
-            "apikey": ALPHA_VANTAGE_KEY,
+            "apikey": settings.alpha_vantage_api_key,
             "limit": limit,
             "sort": "LATEST",
         }

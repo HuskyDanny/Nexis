@@ -19,7 +19,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: nexis-dev-password
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-nexis-dev-password}
       OPENAI_API_KEY: ${SILICONFLOW_API_KEY:-}
       OPENAI_BASE_URL: https://api.siliconflow.cn/v1
       ENVIRONMENT: development
@@ -73,7 +73,7 @@ services:
     volumes:
       - neo4j_data:/data
     environment:
-      NEO4J_AUTH: neo4j/nexis-dev-password
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-nexis-dev-password}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_server_memory_heap_initial__size: 512m
       NEO4J_server_memory_heap_max__size: 1G

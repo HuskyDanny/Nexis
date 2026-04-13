@@ -16,6 +16,7 @@ import { TYPE_COLORS, type Convergence } from "./lib/graph-builder";
 import { AgentFace } from "./components/AgentFace";
 import { ThinkingView } from "./components/ThinkingView";
 import { PoolCard } from "./components/PoolCard";
+import { ToastContainer } from "./components/Toast";
 
 const log = createLogger("app");
 
@@ -130,6 +131,7 @@ function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-surface text-text">
+      <ToastContainer />
       {/* TopBar */}
       <header
         className="flex items-center justify-between px-6 py-3 border-b border-border"

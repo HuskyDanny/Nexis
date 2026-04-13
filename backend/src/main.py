@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.errors import register_exception_handlers
 from src.api.graphs import router as graphs_router
 from src.api.health import router as health_router
 from src.api.nodes import router as nodes_router
@@ -14,6 +15,7 @@ from src.core.config import settings
 from src.core.logger import get_logger
 from src.database.mongodb import mongodb
 from src.database.redis import redis_client
+from src.middleware.request_logging import RequestMiddleware
 from src.services.session_events import registry
 
 log = get_logger("app")
@@ -102,12 +104,24 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     yield
 
     log.info("Shutting down")
+
+    # Drain active SSE sessions first (notify clients)
+    await registry.shutdown_all()
+
     for task in [health_task, cron_task, prepopulate_task]:
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
+
+    # Close shared HTTP client pool
+    try:
+        from src.core.http import close_http_client
+
+        await close_http_client()
+    except (ImportError, Exception) as e:
+        log.debug("HTTP client close skipped: %s", e)
 
     try:
         await close_graph_services()
@@ -117,12 +131,21 @@ async def lifespan(_: FastAPI):  # noqa: ARG001
     await mongodb.close()
 
 
-app = FastAPI(title="Nexis", lifespan=lifespan)
+app = FastAPI(
+    title="Nexis",
+    version="0.2.0",
+    docs_url=None if settings.environment == "production" else "/docs",
+    lifespan=lifespan,
+)
+
+register_exception_handlers(app)
+
+app.add_middleware(RequestMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
 
 app.include_router(health_router)

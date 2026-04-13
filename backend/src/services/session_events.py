@@ -73,6 +73,22 @@ class SessionRegistry:
     def active_count(self) -> int:
         return len(self._sessions)
 
+    async def shutdown_all(self) -> None:
+        """Drain all active sessions — push shutdown event and remove each."""
+        count = len(self._sessions)
+        for sid in list(self._sessions):
+            entry = self._sessions.get(sid)
+            if entry:
+                try:
+                    entry.queue.put_nowait(
+                        SSEEvent(event="error", data={"error": "Server shutting down"})
+                    )
+                except asyncio.QueueFull:
+                    pass
+            self.remove(sid)
+        if count:
+            log.info("Shutdown: drained %d active SSE sessions", count)
+
     async def health_check(self) -> None:
         now = time.time()
         for sid, entry in list(self._sessions.items()):

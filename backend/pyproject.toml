@@ -17,6 +17,7 @@ dependencies = [
     "json-repair>=0.25",
     "litellm>=1.50",
     "graphiti-core>=0.28.0",
+    "tenacity>=8.0",
 ]
 
 [build-system]

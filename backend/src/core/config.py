@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -13,12 +13,14 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "nexis-dev-password"
-    secret_key: str = "dev-secret-change-in-production"
+    neo4j_password: str = ""
+    secret_key: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
+    log_format: str = "text"
     siliconflow_api_key: str = ""
     perigon_api_key: str = ""
+    alpha_vantage_api_key: str = ""
     session: SessionConfig = SessionConfig()
 
     # Pool pipeline config
@@ -38,6 +40,23 @@ class Settings(BaseSettings):
     perigon_agent_daily_cap: int = 2
 
     model_config = {"env_file": [".env.base", ".env"], "env_file_encoding": "utf-8"}
+
+    @model_validator(mode="after")
+    def _validate_production_secrets(self) -> "Settings":
+        if self.environment in ("development", "test"):
+            return self
+        missing: list[str] = []
+        if not self.neo4j_password:
+            missing.append("neo4j_password")
+        if not self.secret_key or "dev" in self.secret_key.lower():
+            missing.append("secret_key")
+        if not self.siliconflow_api_key:
+            missing.append("siliconflow_api_key")
+        if missing:
+            raise ValueError(
+                f"Production environment requires secrets: {', '.join(missing)}"
+            )
+        return self
 
 
 settings = Settings()
