@@ -189,7 +189,18 @@ def run_thinker(
         return effect_nodes, fetch_nodes, effect_edges, fetch_edges, tokens
 
     except Exception as e:
-        log.error("run_thinker failed at layer %d: %s", layer, e)
+        label = (
+            "expected"
+            if isinstance(e, (json.JSONDecodeError, ValueError, KeyError, RuntimeError))
+            else "unexpected"
+        )
+        log.error(
+            "run_thinker %s error at layer %d (%s): %s",
+            label,
+            layer,
+            type(e).__name__,
+            e,
+        )
         return [], [], [], [], tokens
 
 
@@ -381,7 +392,12 @@ def run_matcher(
         return opp_nodes, edges, tokens
 
     except Exception as e:
-        log.error("run_matcher failed: %s", e)
+        label = (
+            "expected"
+            if isinstance(e, (json.JSONDecodeError, ValueError, KeyError, RuntimeError))
+            else "unexpected"
+        )
+        log.error("run_matcher %s error (%s): %s", label, type(e).__name__, e)
         return [], [], tokens
 
 
@@ -581,7 +597,18 @@ def run_controller(
         return ctrl_result, tokens
 
     except Exception as e:
-        log.error("run_controller failed at layer %d: %s", layer, e)
+        label = (
+            "expected"
+            if isinstance(e, (json.JSONDecodeError, ValueError, KeyError, RuntimeError))
+            else "unexpected"
+        )
+        log.error(
+            "run_controller %s error at layer %d (%s): %s",
+            label,
+            layer,
+            type(e).__name__,
+            e,
+        )
         return {
             "continue": False,
             "reasoning": f"Error in controller: {e}",
