@@ -20,7 +20,18 @@ the backend container can reach the host's 7690 port on Linux as well as macOS.
 
 ## Starting / Managing the Shared Instance
 
-One-time setup:
+**Preferred:** use the Makefile. It is idempotent — creates the volume,
+creates/starts the container, and waits until Neo4j answers queries.
+
+```bash
+make dev               # bootstraps Neo4j (if needed), then `docker compose up -d`
+make neo4j             # just ensure Neo4j is running (no compose stack)
+make neo4j-status      # show the container's state
+make neo4j-wipe-nexis  # wipe ONLY this project's data (group_id='nexis')
+make neo4j-stop        # stop shared container — prompts first, affects siblings
+```
+
+Under the hood, `make neo4j` runs this (useful if you prefer raw docker):
 
 ```bash
 docker volume create neo4j-shared-data
@@ -35,7 +46,7 @@ docker run -d --name neo4j-shared --restart unless-stopped \
   neo4j:5
 ```
 
-Ready check:
+Ready check (already built into `make neo4j`):
 
 ```bash
 docker exec neo4j-shared cypher-shell -u neo4j -p shared-dev-password "RETURN 1"
