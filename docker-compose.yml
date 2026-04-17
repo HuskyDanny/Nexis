@@ -12,14 +12,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      neo4j:
-        condition: service_healthy
+    # Neo4j runs as a shared dev instance (see docs/shared-neo4j.md).
+    # host.docker.internal lets the backend container reach the host-bound 7690 port.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       MONGODB_URL: mongodb://mongodb:27017/financial_agent_v2
       REDIS_URL: redis://redis:6379/0
-      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_URI: bolt://host.docker.internal:7690
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-nexis-dev-password}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-shared-dev-password}
       OPENAI_API_KEY: ${SILICONFLOW_API_KEY:-}
       OPENAI_BASE_URL: https://api.siliconflow.cn/v1
       ENVIRONMENT: development
@@ -65,28 +67,11 @@ services:
       timeout: 5s
       retries: 5
 
-  neo4j:
-    image: neo4j:5.26-community
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    volumes:
-      - neo4j_data:/data
-    environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-nexis-dev-password}
-      NEO4J_PLUGINS: '["apoc"]'
-      NEO4J_server_memory_heap_initial__size: 512m
-      NEO4J_server_memory_heap_max__size: 1G
-      NEO4J_server_memory_pagecache_size: 512m
-    healthcheck:
-      test: ["CMD-SHELL", "neo4j status || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-    restart: unless-stopped
+# Neo4j is no longer a service in this stack — we use the shared dev instance
+# started outside docker-compose. See docs/shared-neo4j.md for setup.
+# Pre-migration this was: image neo4j:5.26-community on ports 7474/7687,
+# APOC plugin, 512m/1G heap, 512m pagecache, password nexis-dev-password.
 
 volumes:
   mongodb_data:
   redis_data:
-  neo4j_data:
